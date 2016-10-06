@@ -90,7 +90,9 @@ public class Chat {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
 						if (!connectionExists(socket.getInetAddress(), socket.getPort())) {
-							connections.add(new Connection(socket));
+							Connection connection = new Connection(socket);
+							connections.add(connection);
+							connection.start();
 						}
 
 						// If the connection already exist, then re
@@ -234,7 +236,10 @@ public class Chat {
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp, destPort)) {
 			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + 5);
-			connections.add(new Connection(socket));
+			Connection connection = new Connection(socket);
+			connections.add(connection);
+			connection.start();
+			
 		}
 		else {
 			System.out.println("INSERT ERROR MESSAGE HERE");
