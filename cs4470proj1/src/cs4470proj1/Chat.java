@@ -11,8 +11,6 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 
-import javax.sql.ConnectionEvent;
-
 public class Chat {
 
 	// List of commands.
@@ -183,8 +181,9 @@ public class Chat {
 		}
 		
 		public void run() {
-				while (true) {
-					try {
+			while (true) {
+				try {
+					
 					String input = this.in.readLine();
 					if (input.startsWith(Command.SEND.getName())) {
 						String[] message = parseInput(input, Command.SEND.getName(), 1);
@@ -192,8 +191,11 @@ public class Chat {
 							System.out.println(message);
 						}
 					}
+					else if (input.startsWith(Command.TERMINATE.getName())) {
+						
+					}
 				} catch (IOException e){
-					
+
 				}
 			} 
 		}
@@ -261,7 +263,7 @@ public class Chat {
 			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Command.SEND + " " + args[1]);
+		connection.out.println(Command.SEND.getName() + " " + args[1]);
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
