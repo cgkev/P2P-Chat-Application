@@ -88,7 +88,7 @@ public class Chat {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
 						if (!connectionExists(socket.getInetAddress(), socket.getPort())) {
-							Connection connection = new Connection(socket);
+							Connection connection = new Connection(socket, connections.size());
 							connections.add(connection);
 							connection.start();
 						}
@@ -173,22 +173,23 @@ public class Chat {
 		private Socket socket;
 		private BufferedReader in;
 		private PrintWriter out;
+		private int index;
 
-		Connection(Socket socket) throws IOException {
+		Connection(Socket socket, int index) throws IOException {
 			this.socket = socket;
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             this.out = new PrintWriter(socket.getOutputStream(), true);
+            this.index = index;
 		}
 		
 		public void run() {
 			while (true) {
 				try {
-					
 					String input = this.in.readLine();
 					if (input.startsWith(Command.SEND.getName())) {
 						String[] message = parseInput(input, Command.SEND.getName(), 1);
 						if (message.length == 1) {
-							System.out.println(message);
+							System.out.println("MESSAGE FROM CONNECTION " + this.index + ": " + message[0]);
 						}
 					}
 					else if (input.startsWith(Command.TERMINATE.getName())) {
@@ -238,7 +239,7 @@ public class Chat {
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp, destPort)) {
 			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + 5);
-			Connection connection = new Connection(socket);
+			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
 			connection.start();
 			
@@ -300,6 +301,21 @@ public class Chat {
 			}
 		}
 		return false;
+	}
+	
+	private static int getConnectionIndex(String ip, int port) {
+		int i = 0;
+		for (Connection connection : connections) {
+			Socket socket = connection.socket;
+			if (socket.isClosed()) {
+				continue;
+			}
+			if (socket.getInetAddress().getHostAddress().equals(ip) && socket.getPort() == port) {
+				return i;
+			}
+			i++;
+		}
+		return -1;
 	}
 
 	private static void dropConnection(int id) throws Exception {
