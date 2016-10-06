@@ -1,7 +1,9 @@
 package cs4470proj1;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -113,7 +115,7 @@ public class Chat {
 			BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
 			while (true) {
 				try {
-					String input = userIn.readLine();
+					String input = userIn.readLine().trim();
 					synchronized (connections) {
 						if (input.equals(Command.HELP.getName())) {
 							printHelp();
@@ -140,7 +142,7 @@ public class Chat {
 						}
 						else if (input.startsWith(Command.SEND.getName())) {
 							try {
-								
+								send(input, Command.SEND.getName());
 							}
 							catch (Exception e) {
 								
@@ -154,7 +156,8 @@ public class Chat {
 							System.exit(0);
 						}
 						else {
-							System.out.println("Unknown command: " + input.substring(0, input.indexOf(' ')));
+							int end = input.indexOf(' ');
+							System.out.println("Unknown command: " + (end < 0 ? input : input.substring(0, end)));
 						}
 					}
 				} catch (Exception e) {
@@ -168,9 +171,29 @@ public class Chat {
 	private static class Connection extends Thread {
 
 		private Socket socket;
+		private BufferedReader in;
+		private PrintWriter out;
 
-		Connection(Socket socket) {
+		Connection(Socket socket) throws IOException {
 			this.socket = socket;
+			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.out = new PrintWriter(socket.getOutputStream(), true);
+		}
+		
+		public void run() {
+				while (true) {
+					try {
+					String input = this.in.readLine();
+					if (input.startsWith(Command.SEND.getName())) {
+						String[] message = parseInput(input, Command.SEND.getName(), 1);
+						if (message.length == 1) {
+							System.out.println(message);
+						}
+					}
+				} catch (IOException e){
+					
+				}
+			} 
 		}
 	}
 
@@ -219,7 +242,21 @@ public class Chat {
 	}
 	
 	private static void send(String input, String startsWith) throws Exception {
-		
+		String[] args = parseInput(input, startsWith, 2);
+		if (args.length != 2) {
+			System.out.println("Invalid syntax for send <connection id> <message>.");
+			return;
+		}
+		if (!isNotNegativeInt(args[0])) {
+			System.out.println("Invalid connection ID.");
+			return;
+		}
+		Connection connection = connections.get(Integer.valueOf(args[0]));
+		if (connection.socket.isClosed()) {
+			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
+			return;
+		}
+		connection.out.println(Command.SEND + " " + args[1]);
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
