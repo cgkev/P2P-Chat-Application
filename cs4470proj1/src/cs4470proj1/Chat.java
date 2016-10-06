@@ -190,7 +190,7 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp, destPort)) {
-			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + 2); // TODO Remove +1 for final submission.
+			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + 5);
 			connections.add(new Connection(socket));
 		}
 		else {
