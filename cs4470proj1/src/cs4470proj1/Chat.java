@@ -2,10 +2,14 @@ package cs4470proj1;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+
+import javax.sql.ConnectionEvent;
 
 public class Chat {
 
@@ -16,13 +20,14 @@ public class Chat {
 		MYPORT		("myport"),
 		CONNECT		("connect"),
 		LIST		("list"),
+		SEND		("send"),
 		TERMINATE	("terminate"),
 		EXIT		("exit");
 		private String name;
 		private Command(String name) { this.name = name; }
 		public String getName() { return this.name; }
 	}
-	
+
 	/** List of all connections, including closed connections. */
 	private static ArrayList<Connection> connections = new ArrayList<>();
 
@@ -72,20 +77,20 @@ public class Chat {
 		public void run() {
 			try {
 				System.out.println("PROGRAM RUNNING ON PORT " + this.listener.getLocalPort() + ".");
-				
+
 				// Keep listening for incoming connections.
 				while (true) {
-					
+
 					// Accept incoming connection.
 					Socket socket = listener.accept();
 					System.out.println("Incoming connection requested from " + ipByteToString(socket.getInetAddress().getAddress()) + ":" + socket.getPort());
 					synchronized (connections) {
-						
+
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
 						if (!connectionExists(socket.getInetAddress(), socket.getPort())) {
 							connections.add(new Connection(socket));
 						}
-						
+
 						// If the connection already exist, then re
 						else {
 							socket.close();
@@ -105,25 +110,41 @@ public class Chat {
 	private static class Client extends Thread {
 
 		public void run() {
-			try {
-				BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
-				while (true) {
+			BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
+			while (true) {
+				try {
 					String input = userIn.readLine();
 					synchronized (connections) {
 						if (input.equals(Command.HELP.getName())) {
 							printHelp();
 						}
 						else if (input.equals(Command.MYIP.getName())) {
-							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()) + "\n");
+							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()));
 						}
 						else if (input.equals(Command.MYPORT.getName())) {
-							System.out.println(localPort + "\n");
+							System.out.println(localPort);
 						}
 						else if (input.equals(Command.LIST.getName())) {
 							printList(); 
 						}
 						else if (input.startsWith(Command.CONNECT.getName())) {
-							connect(input, Command.CONNECT.getName());
+							try {
+								connect(input, Command.CONNECT.getName());
+							}
+							catch (UnknownHostException e) {
+								System.out.println("ERROR: Attempted to connected to unknown host.");
+							}
+							catch (ConnectException e) {
+								System.out.println("ERROR: Could not connect.");
+							}
+						}
+						else if (input.startsWith(Command.SEND.getName())) {
+							try {
+								
+							}
+							catch (Exception e) {
+								
+							}
 						}
 						else if (input.startsWith(Command.TERMINATE.getName())) {
 							terminate(input, Command.TERMINATE.getName());
@@ -133,13 +154,14 @@ public class Chat {
 							System.exit(0);
 						}
 						else {
-
+							System.out.println("Unknown command: " + input.substring(0, input.indexOf(' ')));
 						}
 					}
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
 			}
+
 		}
 	}
 
@@ -154,12 +176,11 @@ public class Chat {
 
 	private static void printHelp() {
 		System.out.println("INSERT HELP MESSAGE HERE");
-		System.out.println();
 	}
 
 	private static void printList() {
 		if (connections.size() == 0) {
-			System.out.println("No active connections.\n");
+			System.out.println("No active connections.");
 			return;
 		}
 		// TODO Fix formatting
@@ -174,7 +195,6 @@ public class Chat {
 			System.out.println(id + ": " + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
 			id++;
 		}
-		System.out.println();
 	}
 
 	private static void connect(String input, String startsWith) throws Exception {
@@ -197,6 +217,10 @@ public class Chat {
 			System.out.println("INSERT ERROR MESSAGE HERE");
 		}
 	}
+	
+	private static void send(String input, String startsWith) throws Exception {
+		
+	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
 		String[] args = parseInput(input, startsWith, 1);
@@ -214,7 +238,7 @@ public class Chat {
 			return;
 		}
 		dropConnection(id);
-		System.out.println("INSERT DROPPED CONNECTION MESSAGE HERE\n");
+		System.out.println("INSERT DROPPED CONNECTION MESSAGE HERE.");
 	}
 
 	private static boolean connectionExists(InetAddress ip, int port) {
