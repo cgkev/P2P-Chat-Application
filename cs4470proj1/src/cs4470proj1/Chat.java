@@ -39,13 +39,13 @@ public class Chat {
 
 		// Check if there is at least one argument.
 		if (args.length < 1) {
-			System.out.println("INSERT ERROR MESSAGE HERE");
+			System.out.println("ERROR: Invalid launch parameters.");
 			return;
 		}
 
 		// Check if the first argument (port number) is a non negative integer.
 		if (!isNotNegativeInt(args[0])) {
-			System.out.println("INSERT ERROR MESSAGE HERE");
+			System.out.println("ERROR: " + args[0] + " is not a valid port.");
 			return;
 		}
 
@@ -83,7 +83,7 @@ public class Chat {
 
 					// Accept incoming connection.
 					Socket socket = listener.accept();
-					System.out.println("Incoming connection requested from " + ipByteToString(socket.getInetAddress().getAddress()) + ":" + socket.getPort());
+					System.out.println("Connection request from " + ipByteToString(socket.getInetAddress().getAddress()) + ":" + socket.getPort() + " was accepted.");
 					synchronized (connections) {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
@@ -115,21 +115,32 @@ public class Chat {
 			BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
 			while (true) {
 				try {
-					String input = userIn.readLine().trim();
+					// Wait for user input and check if the input matches any of the valid commands.
+					String input = userIn.readLine();
 					synchronized (connections) {
-						if (input.equals(Command.HELP.getName())) {
+						
+						// help
+						if (commandMatch(input, Command.HELP.getName())) {
 							printHelp();
 						}
-						else if (input.equals(Command.MYIP.getName())) {
+						
+						// myip
+						else if (commandMatch(input, Command.MYIP.getName())) {
 							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()));
 						}
-						else if (input.equals(Command.MYPORT.getName())) {
+						
+						// myport
+						else if (commandMatch(input, Command.MYPORT.getName())) {
 							System.out.println(localPort);
 						}
-						else if (input.equals(Command.LIST.getName())) {
+						
+						// list
+						else if (commandMatch(input, Command.LIST.getName())) {
 							printList(); 
 						}
-						else if (input.startsWith(Command.CONNECT.getName())) {
+						
+						// connect
+						else if (commandMatch(input, Command.CONNECT.getName())) {
 							try {
 								connect(input, Command.CONNECT.getName());
 							}
@@ -140,7 +151,9 @@ public class Chat {
 								System.out.println("ERROR: Could not connect.");
 							}
 						}
-						else if (input.startsWith(Command.SEND.getName())) {
+						
+						// send
+						else if (commandMatch(input, Command.SEND.getName())) {
 							try {
 								send(input, Command.SEND.getName());
 							}
@@ -148,13 +161,20 @@ public class Chat {
 								
 							}
 						}
-						else if (input.startsWith(Command.TERMINATE.getName())) {
+						
+						// terminate
+						else if (commandMatch(input, Command.TERMINATE.getName())) {
 							terminate(input, Command.TERMINATE.getName());
 						}
-						else if (input.startsWith(Command.EXIT.getName())) {
+						
+						// exit
+						else if (commandMatch(input, Command.EXIT.getName())) {
 							dropAllConnections();
+							System.out.println("Exiting...");
 							System.exit(0);
 						}
+						
+						// unknown
 						else {
 							int end = input.indexOf(' ');
 							System.out.println("Unknown command: " + (end < 0 ? input : input.substring(0, end)));
@@ -186,14 +206,14 @@ public class Chat {
 			while (true) {
 				try {
 					String input = this.in.readLine();
-					if (input.startsWith(Command.SEND.getName())) {
+					if (input == null) {
+						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+					}
+					else if (commandMatch(input, Command.SEND.getName())) {
 						String[] message = parseInput(input, Command.SEND.getName(), 1);
 						if (message.length == 1) {
-							System.out.println("MESSAGE FROM CONNECTION " + this.index + ": " + message[0]);
+							System.out.println("MESSAGE RECIVED FROM " + this.index + ": " + message[0]);
 						}
-					}
-					else if (input.startsWith(Command.TERMINATE.getName())) {
-						
 					}
 				} catch (IOException e){
 
@@ -212,16 +232,14 @@ public class Chat {
 			return;
 		}
 		// TODO Fix formatting
-		int id = 0; // Should ID start at 1?
-		System.out.println("id: IP Address\t\t\t\tPort No.");
+		System.out.println("id:\tIP Address  \tPort No.");
 		for (Connection connection : connections) {
 			Socket socket = connection.socket;
 			// TODO: Properly implement timeout to check if connection is broken.
 			if (socket.isClosed()) {
 				continue;
 			}
-			System.out.println(id + ": " + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
-			id++;
+			System.out.println(connection.index + ":\t" + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
 		}
 	}
 
@@ -264,7 +282,7 @@ public class Chat {
 			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Command.SEND.getName() + " " + args[1]);
+		connection.out.println(Command.SEND.getName() + args[1]);
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
@@ -319,9 +337,10 @@ public class Chat {
 	}
 
 	private static void dropConnection(int id) throws Exception {
-		Socket socket = connections.get(id).socket;
-		if (!socket.isClosed()) {
-			socket.close();
+		Connection connection = connections.get(id);
+		if (!connection.socket.isClosed()) {
+//			connection.out.println(Command.TERMINATE);
+			connection.socket.close();
 		}
 	}
 
@@ -345,7 +364,7 @@ public class Chat {
 	private static String[] parseInput(String input, String startsWith, int argCount) {
 		String[] args = new String[argCount];
 		String temp = input.replace(startsWith, "");
-		if (temp.charAt(0) != ' ') {
+		if (temp.length() == 0 || temp.charAt(0) != ' ') {
 			return new String[0];
 		}
 		temp = temp.substring(1);
@@ -369,6 +388,16 @@ public class Chat {
 		return args;
 	}
 
+	private static boolean commandMatch(String input, String command) {
+		if (input.trim().equals(command)) {
+			return true;
+		}
+		if (input.startsWith(command + " ")) {
+			return true;
+		}
+		return false;
+	}
+	
 	/**
 	 * Checks if an input string is a non-negative integer.
 	 * @param string the input string
