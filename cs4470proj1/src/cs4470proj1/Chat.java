@@ -13,8 +13,8 @@ import java.util.ArrayList;
 
 public class Chat {
 
-	// List of commands.
-	private enum Command {
+	// List of commands tokens.
+	private enum Token {
 		HELP		("help"),
 		MYIP		("myip"),
 		MYPORT		("myport"),
@@ -24,7 +24,7 @@ public class Chat {
 		TERMINATE	("terminate"),
 		EXIT		("exit");
 		private String name;
-		private Command(String name) { this.name = name; }
+		private Token(String name) { this.name = name; }
 		public String getName() { return this.name; }
 	}
 
@@ -115,34 +115,34 @@ public class Chat {
 			BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
 			while (true) {
 				try {
-					// Wait for user input and check if the input matches any of the valid commands.
-					String input = userIn.readLine();
+					
+					String input = userIn.readLine(); // Get user input.
 					synchronized (connections) {
 						
-						// help
-						if (commandMatch(input, Command.HELP.getName())) {
+						// help protocol
+						if (commandMatch(input, Token.HELP.getName())) {
 							printHelp();
 						}
 						
-						// myip
-						else if (commandMatch(input, Command.MYIP.getName())) {
+						// myip protocol
+						else if (commandMatch(input, Token.MYIP.getName())) {
 							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()));
 						}
 						
-						// myport
-						else if (commandMatch(input, Command.MYPORT.getName())) {
+						// myport protocol
+						else if (commandMatch(input, Token.MYPORT.getName())) {
 							System.out.println(localPort);
 						}
 						
-						// list
-						else if (commandMatch(input, Command.LIST.getName())) {
+						// list protocol
+						else if (commandMatch(input, Token.LIST.getName())) {
 							printList(); 
 						}
 						
-						// connect
-						else if (commandMatch(input, Command.CONNECT.getName())) {
+						// connect protocol
+						else if (commandMatch(input, Token.CONNECT.getName())) {
 							try {
-								connect(input, Command.CONNECT.getName());
+								connect(input, Token.CONNECT.getName());
 							}
 							catch (UnknownHostException e) {
 								System.out.println("ERROR: Attempted to connected to unknown host.");
@@ -152,29 +152,29 @@ public class Chat {
 							}
 						}
 						
-						// send
-						else if (commandMatch(input, Command.SEND.getName())) {
+						// send protocol
+						else if (commandMatch(input, Token.SEND.getName())) {
 							try {
-								send(input, Command.SEND.getName());
+								send(input, Token.SEND.getName());
 							}
 							catch (Exception e) {
 								
 							}
 						}
 						
-						// terminate
-						else if (commandMatch(input, Command.TERMINATE.getName())) {
-							terminate(input, Command.TERMINATE.getName());
+						// terminate protocol
+						else if (commandMatch(input, Token.TERMINATE.getName())) {
+							terminate(input, Token.TERMINATE.getName());
 						}
 						
-						// exit
-						else if (commandMatch(input, Command.EXIT.getName())) {
+						// exit protocol
+						else if (commandMatch(input, Token.EXIT.getName())) {
 							dropAllConnections();
 							System.out.println("Exiting...");
 							System.exit(0);
 						}
 						
-						// unknown
+						// unknown protocol
 						else {
 							int end = input.indexOf(' ');
 							System.out.println("Unknown command: " + (end < 0 ? input : input.substring(0, end)));
@@ -209,8 +209,8 @@ public class Chat {
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
 					}
-					else if (commandMatch(input, Command.SEND.getName())) {
-						String[] message = parseInput(input, Command.SEND.getName(), 1);
+					else if (commandMatch(input, Token.SEND.getName())) {
+						String[] message = parseInput(input, Token.SEND.getName(), 1);
 						if (message.length == 1) {
 							System.out.println("MESSAGE RECIVED FROM " + this.index + ": " + message[0]);
 						}
@@ -282,7 +282,7 @@ public class Chat {
 			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Command.SEND.getName() + args[1]);
+		connection.out.println(Token.SEND.getName() + args[1]);
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
