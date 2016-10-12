@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -207,6 +208,7 @@ public class Chat {
 					String input = this.in.readLine();
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+						System.out.println("Connection with ID=" + this.index + " was terminated.");
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
 						String[] message = parseInput(input, Token.SEND.getName(), 1);
@@ -255,7 +257,9 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp)) {
-			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
+			Socket socket = new Socket();
+			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
+			//Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
 			connection.start();
