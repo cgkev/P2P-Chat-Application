@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -96,7 +97,6 @@ public class Chat {
 						// If the connection already exist, then re
 						else {
 							socket.close();
-							System.out.println("INSERT ERROR MESSAGE HERE");
 						}
 					}
 				}
@@ -208,6 +208,7 @@ public class Chat {
 					String input = this.in.readLine();
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+						System.out.println("Connection with ID=" + this.index + " was terminated.");
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
 						String[] message = parseInput(input, Token.SEND.getName(), 1);
@@ -264,14 +265,16 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp)) {
-			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
+			Socket socket = new Socket();
+			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
+			//Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
 			connection.start();
-			
+			System.out.println("Successfully connected to " + destIp + ":" + destPort + ".");
 		}
 		else {
-			System.out.println("INSERT ERROR MESSAGE HERE");
+			System.out.println("ERROR: Connection to " + destIp + " already exists.");
 		}
 	}
 	
@@ -305,11 +308,11 @@ public class Chat {
 		}
 		int id = Integer.valueOf(args[0]);
 		if (id < 0 || id >= connections.size()) {
-			System.out.println("Connection ID " + id + " not found.");
+			System.out.println("Connection with ID=" + id + " not found.");
 			return;
 		}
 		dropConnection(id);
-		System.out.println("INSERT DROPPED CONNECTION MESSAGE HERE.");
+		System.out.println("Conneciton to ID=" + id + " was successfully terminated.");
 	}
 
 	private static boolean connectionExists(InetAddress ip) {
@@ -323,7 +326,7 @@ public class Chat {
 				continue;
 			}
 			if (socket.getInetAddress().getHostAddress().equals(ip)) {
-				continue;
+				return true;
 			}
 		}
 		return false;
