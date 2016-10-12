@@ -87,7 +87,7 @@ public class Chat {
 					synchronized (connections) {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
-						if (!connectionExists(socket.getInetAddress(), socket.getPort())) {
+						if (!connectionExists(socket.getInetAddress())) {
 							Connection connection = new Connection(socket, connections.size());
 							connections.add(connection);
 							connection.start();
@@ -255,7 +255,7 @@ public class Chat {
 		}
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
-		if (!connectionExists(destIp, destPort)) {
+		if (!connectionExists(destIp)) {
 			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
@@ -282,7 +282,7 @@ public class Chat {
 			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Token.SEND.getName() + args[1]);
+		connection.out.println(Token.SEND.getName() + " " + args[1]);
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
@@ -304,6 +304,23 @@ public class Chat {
 		System.out.println("INSERT DROPPED CONNECTION MESSAGE HERE.");
 	}
 
+	private static boolean connectionExists(InetAddress ip) {
+		return connectionExists(ip.getHostAddress());
+	}
+	
+	private static boolean connectionExists(String ip) {
+		for (Connection connection : connections) {
+			Socket socket = connection.socket;
+			if (socket.isClosed()) {
+				continue;
+			}
+			if (socket.getInetAddress().getHostAddress().equals(ip)) {
+				continue;
+			}
+		}
+		return false;
+	}
+	
 	private static boolean connectionExists(InetAddress ip, int port) {
 		return connectionExists(ip.getHostAddress(), port);
 	}
