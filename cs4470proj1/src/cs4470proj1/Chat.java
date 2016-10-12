@@ -222,9 +222,17 @@ public class Chat {
 		}
 	}
 
-	private static void printHelp() {
-		System.out.println("INSERT HELP MESSAGE HERE");
-	}
+    private static void printHelp() {
+        System.out.println("Avaiable commands are:");
+        System.out.println("\"myip\"");
+        System.out.println("\"myport\"");
+        System.out.println("\"connect <destination> <port no>\"");
+        System.out.println("\"list\"");
+        System.out.println("\"terminate <connection id.>\"");
+        System.out.println("\"send <connection id.> <message>\"");
+        System.out.println("\"exit\"");
+        System.out.println();
+    }
 
 	private static void printList() {
 		if (connections.size() == 0) {
