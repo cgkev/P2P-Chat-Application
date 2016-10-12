@@ -9,6 +9,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 
@@ -23,7 +24,8 @@ public class Chat {
 		LIST		("list"),
 		SEND		("send"),
 		TERMINATE	("terminate"),
-		EXIT		("exit");
+		EXIT		("exit"),
+		RECEIVED	("received");
 		private String name;
 		private Token(String name) { this.name = name; }
 		public String getName() { return this.name; }
@@ -150,6 +152,9 @@ public class Chat {
 							catch (ConnectException e) {
 								System.out.println("ERROR: Could not connect.");
 							}
+							catch (SocketTimeoutException e) {
+								System.out.println("ERROR: Could not connect.");
+							}
 						}
 						
 						// send protocol
@@ -209,12 +214,18 @@ public class Chat {
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
 						System.out.println("Connection with ID=" + this.index + " was terminated.");
+						break;
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
 						String[] message = parseInput(input, Token.SEND.getName(), 1);
 						if (message.length == 1) {
-							System.out.println("MESSAGE RECIVED FROM " + this.index + ": " + message[0]);
+							System.out.println("Message received from " + ipByteToString(socket.getInetAddress().getAddress()));
+							System.out.println("Sender's Port: " + this.socket.getPort());
+							System.out.println("Message: \"" + message[0] + "\"");
 						}
+					}
+					else if (commandMatch(input, Token.RECEIVED.getName())) {
+						System.out.println("Message received from " + ipByteToString(socket.getInetAddress().getAddress()));
 					}
 				} catch (IOException e){
 
