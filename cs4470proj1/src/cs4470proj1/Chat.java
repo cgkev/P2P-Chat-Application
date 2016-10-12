@@ -96,7 +96,6 @@ public class Chat {
 						// If the connection already exist, then re
 						else {
 							socket.close();
-							System.out.println("INSERT ERROR MESSAGE HERE");
 						}
 					}
 				}
@@ -260,10 +259,10 @@ public class Chat {
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
 			connection.start();
-			
+			System.out.println("Successfully connected to " + destIp + ":" + destPort + ".");
 		}
 		else {
-			System.out.println("INSERT ERROR MESSAGE HERE");
+			System.out.println("ERROR: Connection to " + destIp + " already exists.");
 		}
 	}
 	
@@ -297,11 +296,11 @@ public class Chat {
 		}
 		int id = Integer.valueOf(args[0]);
 		if (id < 0 || id >= connections.size()) {
-			System.out.println("Connection ID " + id + " not found.");
+			System.out.println("Connection with ID=" + id + " not found.");
 			return;
 		}
 		dropConnection(id);
-		System.out.println("INSERT DROPPED CONNECTION MESSAGE HERE.");
+		System.out.println("Conneciton to ID=" + id + " was successfully terminated.");
 	}
 
 	private static boolean connectionExists(InetAddress ip) {
@@ -315,7 +314,7 @@ public class Chat {
 				continue;
 			}
 			if (socket.getInetAddress().getHostAddress().equals(ip)) {
-				continue;
+				return true;
 			}
 		}
 		return false;
