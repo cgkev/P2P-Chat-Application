@@ -256,7 +256,7 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp, destPort)) {
-			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + 5);
+			Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
 			connection.start();
