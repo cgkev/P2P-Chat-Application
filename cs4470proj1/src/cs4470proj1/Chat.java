@@ -15,7 +15,7 @@ import java.util.ArrayList;
 
 public class Chat {
 
-	// List of commands tokens.
+	/** Command tokens. */
 	private enum Token {
 		HELP		("help"),
 		MYIP		("myip"),
@@ -24,8 +24,7 @@ public class Chat {
 		LIST		("list"),
 		SEND		("send"),
 		TERMINATE	("terminate"),
-		EXIT		("exit"),
-		RECEIVED	("received");
+		EXIT		("exit");
 		private String name;
 		private Token(String name) { this.name = name; }
 		public String getName() { return this.name; }
@@ -65,9 +64,7 @@ public class Chat {
 
 	}
 
-	/**
-	 * Handles incoming connections.
-	 */
+	/** Handles incoming connections. */
 	private static class Server extends Thread {
 
 		/** The socket on the server that listens for incoming connections. */
@@ -108,9 +105,7 @@ public class Chat {
 		}
 	}
 
-	/**
-	 * Handles user input.
-	 */
+	/**  Handles user input. */
 	private static class Client extends Thread {
 
 		public void run() {
@@ -213,7 +208,7 @@ public class Chat {
 					String input = this.in.readLine();
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-						System.out.println("Connection with ID=" + this.index + " was terminated.");
+						System.out.println("Connection ID " + this.index + " was terminated.");
 						break;
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
@@ -224,13 +219,15 @@ public class Chat {
 							System.out.println("Message: \"" + message[0] + "\"");
 						}
 					}
-					else if (commandMatch(input, Token.RECEIVED.getName())) {
-						System.out.println("Message received from " + ipByteToString(socket.getInetAddress().getAddress()));
-					}
 				} catch (IOException e){
 
 				}
 			} 
+		}
+
+		public void send(String message) {
+			out.println(Token.SEND.getName() + " " + message);
+			System.out.println("Message sent to " + index + ".");
 		}
 	}
 
@@ -247,20 +244,34 @@ public class Chat {
     }
 
 	private static void printList() {
-		if (connections.size() == 0) {
+		
+		// Check if there are active connections.
+		boolean hasActiveConnections = false;
+		if (connections.size() != 0) {
+			for (Connection connection : connections) {
+				if (!connection.socket.isClosed()) {
+					hasActiveConnections = true;
+					break;
+				}
+			}
+		}
+		
+		// If there were no active connections, then print message and return.
+		if (!hasActiveConnections) {
 			System.out.println("No active connections.");
 			return;
 		}
-		// TODO Fix formatting
+		
+		// If there were at least one active connection, then print the list of connections.
 		System.out.println("id:\tIP Address  \tPort No.");
 		for (Connection connection : connections) {
 			Socket socket = connection.socket;
-			// TODO: Properly implement timeout to check if connection is broken.
 			if (socket.isClosed()) {
 				continue;
 			}
 			System.out.println(connection.index + ":\t" + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
 		}
+		
 	}
 
 	private static void connect(String input, String startsWith) throws Exception {
@@ -301,10 +312,11 @@ public class Chat {
 		}
 		Connection connection = connections.get(Integer.valueOf(args[0]));
 		if (connection.socket.isClosed()) {
-			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
+			System.out.println("ERROR: Connection ID " + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Token.SEND.getName() + " " + args[1]);
+		connection.send(args[1]);
+		
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
@@ -319,11 +331,11 @@ public class Chat {
 		}
 		int id = Integer.valueOf(args[0]);
 		if (id < 0 || id >= connections.size()) {
-			System.out.println("Connection with ID=" + id + " not found.");
+			System.out.println("Connection ID " + id + " not found.");
 			return;
 		}
 		dropConnection(id);
-		System.out.println("Conneciton to ID=" + id + " was successfully terminated.");
+		System.out.println("Conneciton ID " + id + " was successfully terminated.");
 	}
 
 	private static boolean connectionExists(InetAddress ip) {
