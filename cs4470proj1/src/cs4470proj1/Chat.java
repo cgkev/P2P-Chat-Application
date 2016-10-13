@@ -334,8 +334,9 @@ public class Chat {
 			System.out.println("Connection ID " + id + " not found.");
 			return;
 		}
-		dropConnection(id);
-		System.out.println("Conneciton ID " + id + " was successfully terminated.");
+		if (dropConnection(id)) {
+			System.out.println("Conneciton ID " + id + " was successfully terminated.");
+		}
 	}
 
 	private static boolean connectionExists(InetAddress ip) {
@@ -387,12 +388,15 @@ public class Chat {
 		return -1;
 	}
 
-	private static void dropConnection(int id) throws Exception {
+	private static boolean dropConnection(int id) throws Exception {
 		Connection connection = connections.get(id);
 		if (!connection.socket.isClosed()) {
 //			connection.out.println(Command.TERMINATE);
 			connection.socket.close();
+			return true;
 		}
+		System.out.println("ERROR: Connection ID " + id + " is already terminated.");
+		return false;
 	}
 
 	private static void dropAllConnections() throws Exception {
