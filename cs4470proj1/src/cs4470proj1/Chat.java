@@ -9,12 +9,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 
 public class Chat {
 
-	// List of commands tokens.
+	/** Command tokens. */
 	private enum Token {
 		HELP		("help"),
 		MYIP		("myip"),
@@ -63,9 +64,7 @@ public class Chat {
 
 	}
 
-	/**
-	 * Handles incoming connections.
-	 */
+	/** Handles incoming connections. */
 	private static class Server extends Thread {
 
 		/** The socket on the server that listens for incoming connections. */
@@ -106,9 +105,7 @@ public class Chat {
 		}
 	}
 
-	/**
-	 * Handles user input.
-	 */
+	/**  Handles user input. */
 	private static class Client extends Thread {
 
 		public void run() {
@@ -148,6 +145,9 @@ public class Chat {
 								System.out.println("ERROR: Attempted to connected to unknown host.");
 							}
 							catch (ConnectException e) {
+								System.out.println("ERROR: Could not connect.");
+							}
+							catch (SocketTimeoutException e) {
 								System.out.println("ERROR: Could not connect.");
 							}
 						}
@@ -208,18 +208,26 @@ public class Chat {
 					String input = this.in.readLine();
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-						System.out.println("Connection with ID=" + this.index + " was terminated.");
+						System.out.println("Connection ID " + this.index + " was terminated.");
+						break;
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
 						String[] message = parseInput(input, Token.SEND.getName(), 1);
 						if (message.length == 1) {
-							System.out.println("MESSAGE RECIVED FROM " + this.index + ": " + message[0]);
+							System.out.println("Message received from " + ipByteToString(socket.getInetAddress().getAddress()));
+							System.out.println("Sender's Port: " + this.socket.getPort());
+							System.out.println("Message: \"" + message[0] + "\"");
 						}
 					}
 				} catch (IOException e){
 
 				}
 			} 
+		}
+
+		public void send(String message) {
+			out.println(Token.SEND.getName() + " " + message);
+			System.out.println("Message sent to " + index + ".");
 		}
 	}
 
@@ -236,20 +244,34 @@ public class Chat {
     }
 
 	private static void printList() {
-		if (connections.size() == 0) {
+		
+		// Check if there are active connections.
+		boolean hasActiveConnections = false;
+		if (connections.size() != 0) {
+			for (Connection connection : connections) {
+				if (!connection.socket.isClosed()) {
+					hasActiveConnections = true;
+					break;
+				}
+			}
+		}
+		
+		// If there were no active connections, then print message and return.
+		if (!hasActiveConnections) {
 			System.out.println("No active connections.");
 			return;
 		}
-		// TODO Fix formatting
+		
+		// If there were at least one active connection, then print the list of connections.
 		System.out.println("id:\tIP Address  \tPort No.");
 		for (Connection connection : connections) {
 			Socket socket = connection.socket;
-			// TODO: Properly implement timeout to check if connection is broken.
 			if (socket.isClosed()) {
 				continue;
 			}
 			System.out.println(connection.index + ":\t" + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
 		}
+		
 	}
 
 	private static void connect(String input, String startsWith) throws Exception {
@@ -290,10 +312,11 @@ public class Chat {
 		}
 		Connection connection = connections.get(Integer.valueOf(args[0]));
 		if (connection.socket.isClosed()) {
-			System.out.println("ERROR: The connection with ID=" + args[0] + " is closed.");
+			System.out.println("ERROR: Connection ID " + args[0] + " is closed.");
 			return;
 		}
-		connection.out.println(Token.SEND.getName() + " " + args[1]);
+		connection.send(args[1]);
+		
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
@@ -308,11 +331,11 @@ public class Chat {
 		}
 		int id = Integer.valueOf(args[0]);
 		if (id < 0 || id >= connections.size()) {
-			System.out.println("Connection with ID=" + id + " not found.");
+			System.out.println("Connection ID " + id + " not found.");
 			return;
 		}
 		dropConnection(id);
-		System.out.println("Conneciton to ID=" + id + " was successfully terminated.");
+		System.out.println("Conneciton ID " + id + " was successfully terminated.");
 	}
 
 	private static boolean connectionExists(InetAddress ip) {
