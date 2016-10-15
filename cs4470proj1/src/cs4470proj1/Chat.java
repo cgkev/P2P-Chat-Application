@@ -339,10 +339,20 @@ public class Chat {
 		}
 	}
 
+	/** 
+	 * Checks if a connection to an IP Address already exists.
+	 * @param ip An InetAddress representation of the IP address.
+	 * @return True, if a connection to the IP already exists. False otherwise.
+	 */
 	private static boolean connectionExists(InetAddress ip) {
 		return connectionExists(ip.getHostAddress());
 	}
 	
+	/** 
+	 * Checks if a connection to an IP Address already exists.
+	 * @param ip A String representation of the IP address.
+	 * @return True, if a connection to the IP already exists. False otherwise.
+	 */
 	private static boolean connectionExists(String ip) {
 		for (Connection connection : connections) {
 			Socket socket = connection.socket;
@@ -350,23 +360,6 @@ public class Chat {
 				continue;
 			}
 			if (socket.getInetAddress().getHostAddress().equals(ip)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	private static boolean connectionExists(InetAddress ip, int port) {
-		return connectionExists(ip.getHostAddress(), port);
-	}
-
-	private static boolean connectionExists(String ip, int port) {
-		for (Connection connection : connections) {
-			Socket socket = connection.socket;
-			if (socket.isClosed()) {
-				continue;
-			}
-			if (socket.getInetAddress().getHostAddress().equals(ip) && socket.getPort() == port) {
 				return true;
 			}
 		}
