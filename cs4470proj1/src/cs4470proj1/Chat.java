@@ -9,6 +9,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -287,12 +288,24 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp)) {
+			
+			// Create a new socket, but start its connection yet.
 			Socket socket = new Socket();
+			
+			// Bind the socket's local IP and port.
+			socket.bind(new InetSocketAddress(InetAddress.getLocalHost(), localPort + connections.size() + 1));
+			
+			// Start the connection to the client with a timeout of 2 seconds.
 			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
-			//Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
+			
+			// Create new Connection and add it to the list.
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
+			
+			// Start the connection.
 			connection.start();
+			
+			// Print success message.
 			System.out.println("Successfully connected to " + destIp + ":" + destPort + ".");
 		}
 		else {
