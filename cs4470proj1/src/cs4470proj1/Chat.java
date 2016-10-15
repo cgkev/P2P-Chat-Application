@@ -346,7 +346,7 @@ public class Chat {
 			System.out.println("Connection ID " + id + " not found.");
 			return;
 		}
-		if (dropConnection(id)) {
+		if (dropConnection(id, true)) {
 			System.out.println("Conneciton ID " + id + " was successfully terminated.");
 		}
 	}
@@ -381,23 +381,26 @@ public class Chat {
 	/**
 	 * Closes a connection if its ID exists and has not already been closed.
 	 * @param id The ID of the connection.
+	 * @param printError Whether to print an error message if the connection was already terminated.
 	 * @return True if the connection was successfully close, false otherwise.
 	 * @throws Exception
 	 */
-	private static boolean dropConnection(int id) throws Exception {
+	private static boolean dropConnection(int id, boolean printError) throws Exception {
 		Connection connection = connections.get(id);
 		if (!connection.socket.isClosed()) {
 //			connection.out.println(Command.TERMINATE);
 			connection.socket.close();
 			return true;
 		}
-		System.out.println("ERROR: Connection ID " + id + " is already terminated.");
+		if (printError) {
+			System.out.println("ERROR: Connection ID " + id + " is already terminated.");
+		}
 		return false;
 	}
 
 	private static void dropAllConnections() throws Exception {
 		for (int i = 0; i < connections.size(); i++) {
-			dropConnection(i);
+			dropConnection(i, false);
 		}
 	}
 
