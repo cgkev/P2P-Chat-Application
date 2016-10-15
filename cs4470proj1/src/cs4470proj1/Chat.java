@@ -287,12 +287,24 @@ public class Chat {
 		String destIp = args[0];
 		int destPort = Integer.valueOf(args[1]);
 		if (!connectionExists(destIp)) {
+			
+			// Create a new socket, but start its connection yet.
 			Socket socket = new Socket();
+			
+			// Bind the socket's local IP and port.
+			socket.bind(new InetSocketAddress(InetAddress.getLocalHost(), localPort + connections.size() + 1));
+			
+			// Start the connection to the client with a timeout of 2 seconds.
 			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
-			//Socket socket = new Socket(destIp, destPort, InetAddress.getLocalHost(), localPort + connections.size() + 1);
+			
+			// Create new Connection and add it to the list.
 			Connection connection = new Connection(socket, connections.size());
 			connections.add(connection);
+			
+			// Start the connection.
 			connection.start();
+			
+			// Print success message.
 			System.out.println("Successfully connected to " + destIp + ":" + destPort + ".");
 		}
 		else {
@@ -339,10 +351,20 @@ public class Chat {
 		}
 	}
 
+	/** 
+	 * Checks if a connection to an IP Address already exists.
+	 * @param ip An InetAddress representation of the IP address.
+	 * @return True, if a connection to the IP already exists. False otherwise.
+	 */
 	private static boolean connectionExists(InetAddress ip) {
 		return connectionExists(ip.getHostAddress());
 	}
 	
+	/** 
+	 * Checks if a connection to an IP Address already exists.
+	 * @param ip A String representation of the IP address.
+	 * @return True, if a connection to the IP already exists. False otherwise.
+	 */
 	private static boolean connectionExists(String ip) {
 		for (Connection connection : connections) {
 			Socket socket = connection.socket;
@@ -355,39 +377,13 @@ public class Chat {
 		}
 		return false;
 	}
-	
-	private static boolean connectionExists(InetAddress ip, int port) {
-		return connectionExists(ip.getHostAddress(), port);
-	}
 
-	private static boolean connectionExists(String ip, int port) {
-		for (Connection connection : connections) {
-			Socket socket = connection.socket;
-			if (socket.isClosed()) {
-				continue;
-			}
-			if (socket.getInetAddress().getHostAddress().equals(ip) && socket.getPort() == port) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	private static int getConnectionIndex(String ip, int port) {
-		int i = 0;
-		for (Connection connection : connections) {
-			Socket socket = connection.socket;
-			if (socket.isClosed()) {
-				continue;
-			}
-			if (socket.getInetAddress().getHostAddress().equals(ip) && socket.getPort() == port) {
-				return i;
-			}
-			i++;
-		}
-		return -1;
-	}
-
+	/**
+	 * Closes a connection if its ID exists and has not already been closed.
+	 * @param id The ID of the connection.
+	 * @return True if the connection was successfully close, false otherwise.
+	 * @throws Exception
+	 */
 	private static boolean dropConnection(int id) throws Exception {
 		Connection connection = connections.get(id);
 		if (!connection.socket.isClosed()) {
@@ -416,6 +412,14 @@ public class Chat {
 		return "INVALID IP BYTE LENGTH";
 	}
 
+	/**
+	 * Parses a String for command arguments.
+	 * @param input The input String.
+	 * @param startsWith The expected starting substring of the input String.
+	 * @param argCount The expected argument count of the string.
+	 * @return An array of String containing the parsed arguments, or an empty array if the input String
+	 * does not match the expected starting substring or the expected argument count.
+	 */
 	private static String[] parseInput(String input, String startsWith, int argCount) {
 		String[] args = new String[argCount];
 		String temp = input.replace(startsWith, "");
@@ -443,6 +447,12 @@ public class Chat {
 		return args;
 	}
 
+	/**
+	 * Checks if a String matches the pattern required for a specified.
+	 * @param input The input string.
+	 * @param command The command to compare the input string with.
+	 * @return
+	 */
 	private static boolean commandMatch(String input, String command) {
 		if (input.trim().equals(command)) {
 			return true;
