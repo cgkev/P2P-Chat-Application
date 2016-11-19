@@ -220,7 +220,7 @@ public class DistanceVectorRouting {
 
 						// update protocol
 						else if (commandMatch(input, Token.UPDATE.getName())) {
-							updateLinkCost(input);
+							updateLinkCost(input.replace(Token.UPDATE.getName(), ""));
 						}
 
 						// disable protocol
@@ -518,20 +518,20 @@ public class DistanceVectorRouting {
 
 	private static void updateLinkCost(String input) throws Exception {
 		String[] args = input.split(" ");
-		if (args.length != 4) {
+		if (args.length != 3) {
 			System.out.println("Invalid syntax for: update <server-ID1> <server-ID2> <Link Cost>.");
 			return;
 		}
-		if (!isNotNegativeInt(args[1]) || !isNotNegativeInt(args[2])) {
+		if (!isNotNegativeInt(args[0]) || !isNotNegativeInt(args[1])) {
 			System.out.println("Invalid server ID number(s).");
 			return;
 		}
 		int linkedServerId = -1;
-		if (Integer.parseInt(args[1]) == serverId) {
-			linkedServerId = Integer.parseInt(args[2]);
-		}
-		else if (Integer.parseInt(args[2]) == serverId) {
+		if (Integer.parseInt(args[0]) == serverId) {
 			linkedServerId = Integer.parseInt(args[1]);
+		}
+		else if (Integer.parseInt(args[1]) == serverId) {
+			linkedServerId = Integer.parseInt(args[0]);
 		}
 		else {
 			System.out.println("The requested update does not involve this server (ID " + serverId + ").");
@@ -543,11 +543,11 @@ public class DistanceVectorRouting {
 			return;
 		}
 		int newLinkCost = server.linkCost;
-		if (args[3].equals("inf")) {
+		if (args[2].equals("inf")) {
 			newLinkCost = Short.MAX_VALUE;
 		}
-		else if (isNotNegativeInt(args[3])) {
-			newLinkCost = Integer.parseInt(args[3]);
+		else if (isNotNegativeInt(args[2])) {
+			newLinkCost = Integer.parseInt(args[2]);
 		}
 		else {
 			System.out.println("Invalid link cost.");
@@ -781,12 +781,13 @@ public class DistanceVectorRouting {
 
 			}
 			else if (lineNumber > 2 + expectedServerCount) {
-				String[] neighborInfo = line.split(" ");
-				Server server = serverList.findById(Integer.parseInt(neighborInfo[1]));
-				if (server != null) {
-					server.linkCost = Integer.parseInt(neighborInfo[2]);
-					server.calculatedCost = server.linkCost;
-				}
+//				String[] neighborInfo = line.split(" ");
+//				Server server = serverList.findById(Integer.parseInt(neighborInfo[1]));
+//				if (server != null) {
+//					server.linkCost = Integer.parseInt(neighborInfo[2]);
+//					server.calculatedCost = server.linkCost;
+//				}
+				updateLinkCost(line);
 			}
 
 		}
