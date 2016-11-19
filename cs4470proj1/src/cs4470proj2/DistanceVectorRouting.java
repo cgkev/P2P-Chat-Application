@@ -573,7 +573,9 @@ public class DistanceVectorRouting {
 	
 	private static void calculateRouting() {
 		synchronized (serverList) {
-			
+			for (Server server : serverList.servers) {
+				server.calculatedCost = Math.min(server.linkCost, server.calculatedCost);
+			}
 			
 		}
 	}
