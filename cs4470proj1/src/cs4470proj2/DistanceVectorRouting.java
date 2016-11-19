@@ -531,7 +531,7 @@ public class DistanceVectorRouting {
 	}
 
 	private static void updateLinkCost(String input) throws Exception {
-		String[] args = input.split(" ");
+		String[] args = input.trim().split(" ");
 		if (args.length != 3) {
 			System.out.println("Invalid syntax for: update <server-ID1> <server-ID2> <Link Cost>.");
 			return;
@@ -568,7 +568,7 @@ public class DistanceVectorRouting {
 			return;
 		}
 		server.linkCost = newLinkCost;
-		System.out.println(newLinkCost);
+		server.calculatedCost = Short.MAX_VALUE;
 	}
 	
 	private static void calculateRouting() {
@@ -589,7 +589,6 @@ public class DistanceVectorRouting {
 			}
 		}
 		routingUpdateCountdown = routingUpdateInterval;
-		System.out.println("UPDATING");
 	}
 
 	private static void disable(String input, String startsWith) throws Exception {
