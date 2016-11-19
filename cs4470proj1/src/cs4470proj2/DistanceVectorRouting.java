@@ -137,6 +137,7 @@ public class DistanceVectorRouting {
 				if (routingUpdateCountdown <= 0) {
 					try {
 						serverList.checkConnections();
+						calculateRouting();
 						sendRoutingUpdate();
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -169,6 +170,7 @@ public class DistanceVectorRouting {
 					synchronized (serverList) {
 						Server server = serverList.findByIp(socket.getInetAddress());
 						if (server != null && !server.isConnected()) {
+							System.out.println("CONNECTION ACCEPTED");
 							server.connect(socket);
 						}
 						else {
@@ -346,6 +348,7 @@ public class DistanceVectorRouting {
 			}
 			catch (SocketException e) {
 				this.disconnect();
+				System.out.println("DISCONNECTED");
 			}
 			catch (IOException e) {
 				e.printStackTrace();
@@ -566,6 +569,13 @@ public class DistanceVectorRouting {
 		}
 		server.linkCost = newLinkCost;
 		System.out.println(newLinkCost);
+	}
+	
+	private static void calculateRouting() {
+		synchronized (serverList) {
+			
+			
+		}
 	}
 
 	private static void sendRoutingUpdate() throws Exception {
