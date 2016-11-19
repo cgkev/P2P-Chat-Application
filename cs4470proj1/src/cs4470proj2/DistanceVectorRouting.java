@@ -13,6 +13,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.Timer;
@@ -165,17 +166,11 @@ public class DistanceVectorRouting {
 
 					// Accept incoming connection.
 					Socket socket = listener.accept();
-					System.out.println("Connection request from " + ipByteToString(socket.getInetAddress().getAddress()) + ":" + socket.getPort() + " was accepted.");
 					synchronized (serverList) {
-
-						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
-						if (!connectionExists(socket.getInetAddress())) {
-							//							Server connection = new Server(socket, servers.size());
-							//							servers.add(connection);
-							//							connection.start();
+						Server server = serverList.findByIp(socket.getInetAddress());
+						if (server != null && !server.isConnected()) {
+							server.connect(socket);
 						}
-
-						// If the connection already exist, then re
 						else {
 							socket.close();
 						}
@@ -276,12 +271,12 @@ public class DistanceVectorRouting {
 			this.linkCost = Short.MAX_VALUE;
 			this.nextHopId = id;
 		}
-		
+
 		// If the link cost is infinity, then the server is not a neighbor.
 		public boolean isNeighbor() {
 			return this.linkCost != Short.MAX_VALUE;
 		}
-		
+
 		public boolean isConnected() throws IOException {
 			if (this.connection == null) {
 				return false;
@@ -321,24 +316,32 @@ public class DistanceVectorRouting {
 				}
 			}
 		}
-		
+
 		public void connect(Socket socket) throws IOException {
 			if (!this.disabled && this.connection != null && this.isNeighbor() && this.connection.socket.isClosed()) {
 				this.disconnect();
 				this.connection = new Connection(socket);
 			}
 		}
-		
+
 		public void disconnect() throws IOException {
 			this.connection.socket.close();
 			this.connection.stop = true;
 			this.connection = null;
 			this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
 		}
-		
-		public void sent(byte[] message) throws IOException {
-			this.connection.out.writeInt(message.length);
-			this.connection.out.write(message);
+
+		public void send(byte[] message) throws IOException {
+			try {
+				this.connection.out.writeInt(message.length);
+				this.connection.out.write(message);
+			}
+			catch (SocketException e) {
+				this.disconnect();
+			}
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
 		@Override
@@ -365,21 +368,21 @@ public class DistanceVectorRouting {
 			while (!stop) {
 				try {
 					String input = this.in.readLine();
-//					if (input == null) {
-//						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-//						System.out.println("Connection was terminated.");
-//						break;
-//					}
-//					else {
-						int length = in.readInt();
-						if(length > 0) {
-						    byte[] message = new byte[length];
-						    in.readFully(message, 0, message.length);
-						    for (byte data : message) {
-						    	System.out.println(data);
-						    }
+					//					if (input == null) {
+					//						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+					//						System.out.println("Connection was terminated.");
+					//						break;
+					//					}
+					//					else {
+					int length = in.readInt();
+					if(length > 0) {
+						byte[] message = new byte[length];
+						in.readFully(message, 0, message.length);
+						for (byte data : message) {
+							System.out.println(data);
 						}
-//					}
+					}
+					//					}
 				} catch (IOException e){
 
 				}
@@ -411,7 +414,7 @@ public class DistanceVectorRouting {
 			}
 			return null;
 		}
-		
+
 		public Server findByIp(InetAddress address) {
 			String ip = address.getHostAddress();
 			for (Server server : servers) {
@@ -502,7 +505,7 @@ public class DistanceVectorRouting {
 
 		// Print header
 		System.out.println("\nDest ID\t\tNext Hop ID\tCost of Path");
-		
+
 		// Print list of servers.
 		boolean printedThisServer = false;
 		for (Server server : serverList.servers) {
@@ -554,6 +557,7 @@ public class DistanceVectorRouting {
 			return;
 		}
 		server.linkCost = newLinkCost;
+		System.out.println(newLinkCost);
 	}
 
 	private static void sendRoutingUpdate() throws Exception {
@@ -561,7 +565,7 @@ public class DistanceVectorRouting {
 		byte[] byteMessage = message.getByteMessage();
 		for (Server server : serverList.servers) {
 			if (server.isNeighbor() && server.isConnected()) {
-				server.sent(byteMessage);
+				server.send(byteMessage);
 			}
 		}
 		routingUpdateCountdown = routingUpdateInterval;
@@ -603,15 +607,15 @@ public class DistanceVectorRouting {
 	 * @return True, if a connection to the IP already exists. False otherwise.
 	 */
 	private static boolean connectionExists(String ip) {
-//		for (Server connection : serverList.servers) {
-//			Socket socket = connection.socket;
-//			if (socket.isClosed()) {
-//				continue;
-//			}
-//			if (socket.getInetAddress().getHostAddress().equals(ip)) {
-//				return true;
-//			}
-//		}
+		//		for (Server connection : serverList.servers) {
+		//			Socket socket = connection.socket;
+		//			if (socket.isClosed()) {
+		//				continue;
+		//			}
+		//			if (socket.getInetAddress().getHostAddress().equals(ip)) {
+		//				return true;
+		//			}
+		//		}
 		return false;
 	}
 
@@ -623,15 +627,15 @@ public class DistanceVectorRouting {
 	 * @throws Exception
 	 */
 	private static boolean dropConnection(int id, boolean printError) throws Exception {
-//		Server connection = serverList.servers.get(id);
-//		if (!connection.socket.isClosed()) {
-//			//			connection.out.println(Command.TERMINATE);
-//			connection.socket.close();
-//			return true;
-//		}
-//		if (printError) {
-//			System.out.println("ERROR: Connection ID " + id + " is already terminated.");
-//		}
+		//		Server connection = serverList.servers.get(id);
+		//		if (!connection.socket.isClosed()) {
+		//			//			connection.out.println(Command.TERMINATE);
+		//			connection.socket.close();
+		//			return true;
+		//		}
+		//		if (printError) {
+		//			System.out.println("ERROR: Connection ID " + id + " is already terminated.");
+		//		}
 		return false;
 	}
 
@@ -781,12 +785,12 @@ public class DistanceVectorRouting {
 
 			}
 			else if (lineNumber > 2 + expectedServerCount) {
-//				String[] neighborInfo = line.split(" ");
-//				Server server = serverList.findById(Integer.parseInt(neighborInfo[1]));
-//				if (server != null) {
-//					server.linkCost = Integer.parseInt(neighborInfo[2]);
-//					server.calculatedCost = server.linkCost;
-//				}
+				//				String[] neighborInfo = line.split(" ");
+				//				Server server = serverList.findById(Integer.parseInt(neighborInfo[1]));
+				//				if (server != null) {
+				//					server.linkCost = Integer.parseInt(neighborInfo[2]);
+				//					server.calculatedCost = server.linkCost;
+				//				}
 				updateLinkCost(line);
 			}
 
