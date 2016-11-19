@@ -16,6 +16,8 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * CS 4470 Fall 2016 Project 2
@@ -41,11 +43,22 @@ public class DistanceVectorRouting {
 		public String getName() { return this.name; }
 	}
 
-	/** List of all connections, including closed connections. */
-	private static ArrayList<Server> connections;
+	private static ServerList serverList;
 
 	/** The local port being used by the program */
-	private static int localPort;
+	private static int localPort = 0;
+	
+	/** The id of this server */
+	private static int serverId = 0;
+	
+	/** The routing update interval in miliseconds. */
+	private static int routingUpdateInterval = -1;
+	
+	/** The countdown before the next routing update */
+	private static long routingUpdateCountdown = -1;
+	
+	/** The countdown update interval in miliseconds. */
+	private static int routingUpateCountdownInterval = 100;
 
 	// Main method.
 	public static void main(String[] args) throws Exception {
@@ -59,7 +72,6 @@ public class DistanceVectorRouting {
 
 		// Parse launch parameters
 		String topologyFileName = "";
-		int routingUpdateInterval = -1;
 		for (int i = 0; i < args.length; i++) {
 			String arg = args[i];
 			if ((i + 1) < args.length) {
@@ -70,7 +82,7 @@ public class DistanceVectorRouting {
 				if (routingUpdateInterval < 0 && arg.equals("-i")) {
 					arg = args[++i];
 					if (isNotNegativeInt(arg)) {
-						routingUpdateInterval = Integer.parseInt(arg);
+						routingUpdateInterval = Integer.parseInt(arg) * 1000;
 						continue;
 					}
 					System.out.println("ERROR: " + arg + " is not a valid update interval.");
@@ -82,22 +94,20 @@ public class DistanceVectorRouting {
 			System.out.println("ERROR: Invalid launch parameters.");
 			return;
 		}
-
-		File f = new File("D:\\Eclipse Workspaces\\P2P-Chat-Application\\cs4470proj1\\src\\cs4470proj2\\routing.txt");
+		
+		File f = new File(topologyFileName);
 		if (f.exists()) {
-
+			parseTopologyFile(f);
+			if (localPort == 0 || serverId == 0) {
+				System.out.println("ERROR: Server info is undefined in topology file.");
+				return;
+			}
 		}
-
-
-		// Check if the first argument (port number) is a non negative integer.
-		if (!isNotNegativeInt(args[0])) {
-			System.out.println("ERROR: " + args[0] + " is not a valid port.");
+		else {
+			System.out.println("ERROR: Topology file not found.");
 			return;
 		}
-
-		// Get local port number from the arguments.
-		localPort = (Integer.parseInt(args[0]));
-
+		
 		// Create a new server thread and start it.
 		InboundConnectionHandler inboundConnectionHandler = new InboundConnectionHandler(localPort);
 		inboundConnectionHandler.start();
@@ -105,6 +115,22 @@ public class DistanceVectorRouting {
 		// Create a new client thread and start it.
 		UserInputHandler userInputHandler = new UserInputHandler();
 		userInputHandler.start();
+		
+		Timer timer = new Timer();
+		timer.scheduleAtFixedRate(new TimerTask() {
+			
+			@Override
+			public void run() {
+				routingUpdateCountdown -= routingUpateCountdownInterval;
+				if (routingUpdateCountdown <= 0) {
+					try {
+						sendRoutingUpdate();
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}, routingUpateCountdownInterval, routingUpateCountdownInterval);
 
 	}
 
@@ -128,13 +154,13 @@ public class DistanceVectorRouting {
 					// Accept incoming connection.
 					Socket socket = listener.accept();
 					System.out.println("Connection request from " + ipByteToString(socket.getInetAddress().getAddress()) + ":" + socket.getPort() + " was accepted.");
-					synchronized (connections) {
+					synchronized (serverList) {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
 						if (!connectionExists(socket.getInetAddress())) {
-							Server connection = new Server(socket, connections.size());
-							connections.add(connection);
-							connection.start();
+							//							Server connection = new Server(socket, servers.size());
+							//							servers.add(connection);
+							//							connection.start();
 						}
 
 						// If the connection already exist, then re
@@ -158,7 +184,7 @@ public class DistanceVectorRouting {
 				try {
 
 					String input = userIn.readLine(); // Get user input.
-					synchronized (connections) {
+					synchronized (serverList) {
 
 						// help protocol
 						if (commandMatch(input, Token.HELP.getName())) {
@@ -239,16 +265,20 @@ public class DistanceVectorRouting {
 	 */
 	private static class Server extends Thread {
 
+		private int serverId;
+		private String ipString;
+		private int port;
+		private boolean isNeighbor;
+		private int cost;
 		private Socket socket;
 		private BufferedReader in;
 		private PrintWriter out;
-		private int index;
 
-		Server(Socket socket, int index) throws IOException {
-			this.socket = socket;
-			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-			this.out = new PrintWriter(socket.getOutputStream(), true);
-			this.index = index;
+		public Server(int id, String ipString, int port) {
+			this.serverId = id;
+			this.ipString = ipString;
+			this.port = port;
+			this.isNeighbor = false;
 		}
 
 		public void run() {
@@ -257,7 +287,7 @@ public class DistanceVectorRouting {
 					String input = this.in.readLine();
 					if (input == null) {
 						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-						System.out.println("Connection ID " + this.index + " was terminated.");
+						System.out.println("Connection ID " + this.serverId + " was terminated.");
 						break;
 					}
 					else if (commandMatch(input, Token.SEND.getName())) {
@@ -276,7 +306,69 @@ public class DistanceVectorRouting {
 
 		public void send(String message) {
 			out.println(Token.SEND.getName() + " " + message);
-			System.out.println("Message sent to " + index + ".");
+			System.out.println("Message sent to " + serverId + ".");
+		}
+
+		public boolean isConnected() {
+			if (this.socket == null) {
+				return false;
+			}
+			if (this.socket.isConnected() && !this.socket.isClosed()) {
+				return true;
+			}
+			return false;
+		}
+
+		public void connect() {
+			if (!this.isConnected()) {
+				try {
+
+					// Create a new socket, but do not start its connection yet.
+					if (this.socket == null) {
+						Socket socket = new Socket();
+						this.socket = socket;
+					}
+
+					//					// Bind the socket's local IP and port.
+					//					socket.bind(new InetSocketAddress(InetAddress.getLocalHost(), localPort + connections.size() + 1));
+
+					// Start the connection to the client with a timeout of 2 seconds.
+					socket.connect(new InetSocketAddress(this.ipString, this.port), 2000);
+				}
+				catch (UnknownHostException e) {
+					System.out.println("ERROR: Attempted to connected to unknown host.");
+				}
+				catch (ConnectException e) {
+					System.out.println("ERROR: Could not connect.");
+				}
+				catch (SocketTimeoutException e) {
+					System.out.println("ERROR: Timed out while attempting to connect.");
+				}
+				catch (Exception e) {
+					System.out.println("ERROR: Could not connect.");
+				}
+			}
+		}
+
+		public void connect(Socket socket) {
+			this.socket = socket;
+		}
+	}
+	
+	private static class ServerList {
+		
+		private List<Server> servers;
+		
+		public ServerList(List<Server> servers) {
+			this.servers = servers;
+		}
+		
+		public void checkConnections() {
+			for (Server server : this.servers) {
+				if (!server.isConnected()) {
+					server.connect();
+				}
+			}
 		}
 	}
 
@@ -296,8 +388,8 @@ public class DistanceVectorRouting {
 
 		// Check if there are active connections.
 		boolean hasActiveConnections = false;
-		if (connections.size() != 0) {
-			for (Server connection : connections) {
+		if (serverList.servers.size() != 0) {
+			for (Server connection : serverList.servers) {
 				if (!connection.socket.isClosed()) {
 					hasActiveConnections = true;
 					break;
@@ -313,52 +405,18 @@ public class DistanceVectorRouting {
 
 		// If there were at least one active connection, then print the list of connections.
 		System.out.println("id:\tIP Address  \tPort No.");
-		for (Server connection : connections) {
+		for (Server connection : serverList.servers) {
 			Socket socket = connection.socket;
 			if (socket.isClosed()) {
 				continue;
 			}
-			System.out.println(connection.index + ":\t" + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
+			System.out.println(connection.serverId + ":\t" + ipByteToString(socket.getInetAddress().getAddress()) + "\t" + socket.getPort());
 		}
 
 	}
 
 	private static void connect(String input, String startsWith) throws Exception {
-		String[] args = parseInput(input, startsWith, 2);
-		if (args.length != 2) {
-			System.out.println("Invalid syntax for connect <destination> <port no>.");
-			return;
-		}
-		if (!isNotNegativeInt(args[1])) {
-			System.out.println("Invalid Port");
-			return;
-		}
-		String destIp = args[0];
-		int destPort = Integer.valueOf(args[1]);
-		if (!connectionExists(destIp)) {
 
-			// Create a new socket, but start its connection yet.
-			Socket socket = new Socket();
-
-			// Bind the socket's local IP and port.
-			socket.bind(new InetSocketAddress(InetAddress.getLocalHost(), localPort + connections.size() + 1));
-
-			// Start the connection to the client with a timeout of 2 seconds.
-			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
-
-			// Create new Connection and add it to the list.
-			Server connection = new Server(socket, connections.size());
-			connections.add(connection);
-
-			// Start the connection.
-			connection.start();
-
-			// Print success message.
-			System.out.println("Successfully connected to " + destIp + ":" + destPort + ".");
-		}
-		else {
-			System.out.println("ERROR: Connection to " + destIp + " already exists.");
-		}
 	}
 
 	private static void send(String input, String startsWith) throws Exception {
@@ -371,13 +429,23 @@ public class DistanceVectorRouting {
 			System.out.println("Invalid connection ID.");
 			return;
 		}
-		Server connection = connections.get(Integer.valueOf(args[0]));
+		Server connection = serverList.get(Integer.valueOf(args[0]));
 		if (connection.socket.isClosed()) {
 			System.out.println("ERROR: Connection ID " + args[0] + " is closed.");
 			return;
 		}
 		connection.send(args[1]);
 
+	}
+	
+	private static void sendRoutingUpdate() throws Exception {
+		for (Server server : serverList.servers) {
+			if (server.isNeighbor) {
+			
+			}
+		}
+		routingUpdateCountdown = routingUpdateInterval;
+		System.out.println("UPDATING");
 	}
 
 	private static void terminate(String input, String startsWith) throws Exception {
@@ -391,7 +459,7 @@ public class DistanceVectorRouting {
 			return;
 		}
 		int id = Integer.valueOf(args[0]);
-		if (id < 0 || id >= connections.size()) {
+		if (id < 0 || id >= serverList.servers.size()) {
 			System.out.println("Connection ID " + id + " not found.");
 			return;
 		}
@@ -415,7 +483,7 @@ public class DistanceVectorRouting {
 	 * @return True, if a connection to the IP already exists. False otherwise.
 	 */
 	private static boolean connectionExists(String ip) {
-		for (Server connection : connections) {
+		for (Server connection : serverList) {
 			Socket socket = connection.socket;
 			if (socket.isClosed()) {
 				continue;
@@ -435,7 +503,7 @@ public class DistanceVectorRouting {
 	 * @throws Exception
 	 */
 	private static boolean dropConnection(int id, boolean printError) throws Exception {
-		Server connection = connections.get(id);
+		Server connection = serverList.get(id);
 		if (!connection.socket.isClosed()) {
 			//			connection.out.println(Command.TERMINATE);
 			connection.socket.close();
@@ -448,7 +516,7 @@ public class DistanceVectorRouting {
 	}
 
 	private static void dropAllConnections() throws Exception {
-		for (int i = 0; i < connections.size(); i++) {
+		for (int i = 0; i < serverList.size(); i++) {
 			dropConnection(i, false);
 		}
 	}
@@ -533,25 +601,67 @@ public class DistanceVectorRouting {
 	}
 
 	/**
-	 * Parses the topology file and outputs a List of Neighbors.
+	 * Parses the topology file and updates the list of servers.
 	 * Currently, error checking is NOT implemented.
 	 * @param file The topology file.
 	 * @throws Exception 
 	 */
-	private static List<Server> parseTopologyFile(File file) throws Exception {
-		List<Server> neighbors = null;
+	private static void parseTopologyFile(File file) throws Exception {
+		ArrayList<Server> servers = null;
 		BufferedReader br = new BufferedReader(new FileReader(file.getAbsolutePath()));
+		//		int expectedNeighbors = 0;
+		int expectedServerCount = 0;
 		int lineNumber = 0;
 		while (true) {
 			lineNumber++;
 			String line = br.readLine();
+			if (line == null) {
+				break;
+			}
 			if (lineNumber == 1) {
 				// Create new ArrayList with capacity equal to the number of expected servers.
-				neighbors = new ArrayList<>(Integer.parseInt(line));
+				expectedServerCount = Integer.parseInt(line);
+				servers = new ArrayList<>(expectedServerCount);
 			}
-			
+			else if (lineNumber == 2) {
+				//				expectedNeighbors = Integer.parseInt(line);
+			}
+			else if (lineNumber > 2 && lineNumber <= 2 + expectedServerCount) {
+				String[] serverInfo = line.split(" ");
+				
+				// If the server info is describing this server...
+				String myip = ipByteToString(InetAddress.getLocalHost().getAddress());
+				if (serverInfo[1].equals(myip)) {
+					serverId = Integer.parseInt(serverInfo[0]);
+					localPort = Integer.parseInt(serverInfo[2]);
+				}
+				
+				// If the server info is describing another server...
+				else {
+					Server server = new Server(Integer.parseInt(serverInfo[0]), serverInfo[1], Integer.parseInt(serverInfo[2]));
+					servers.add(server);
+				}
+				
+			}
+			else if (lineNumber > 2 + expectedServerCount) {
+				String[] neighborInfo = line.split(" ");
+				Server server = findServerById(servers, Integer.parseInt(neighborInfo[1]));
+				if (server != null) {
+					server.cost = Integer.parseInt(neighborInfo[2]);
+				}
+			}
+
 		}
-		return neighbors;
+		serverList = new ServerList(servers);
+	}
+
+	private static Server findServerById(List<Server> servers, int serverId) {
+		for (Server server : servers) {
+			if (server.serverId == serverId) {
+				return server;
+			}
+		}
+		return null;
 	}
 
 }
