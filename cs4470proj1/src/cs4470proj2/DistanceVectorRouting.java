@@ -1,6 +1,9 @@
 package cs4470proj2;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -12,7 +15,15 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * CS 4470 Fall 2016 Project 2
+ * @author Kevin Huynh
+ * @author Alvin Quach
+ * @author Robert Rosas
+ * @author Mauricio Sandoval
+ */
 public class DistanceVectorRouting {
 
 	/** Command tokens. */
@@ -31,7 +42,7 @@ public class DistanceVectorRouting {
 	}
 
 	/** List of all connections, including closed connections. */
-	private static ArrayList<Connection> connections;
+	private static ArrayList<Server> connections;
 
 	/** The local port being used by the program */
 	private static int localPort;
@@ -39,8 +50,9 @@ public class DistanceVectorRouting {
 	// Main method.
 	public static void main(String[] args) throws Exception {
 
-		// Check if there is at least one argument.
-		if (args.length < 1) {
+		// Check if there is at least four argument.
+		// TODO Set default values that can be used if no parameters are specified.
+		if (args.length < 4) {
 			System.out.println("ERROR: Invalid launch parameters.");
 			return;
 		}
@@ -57,7 +69,7 @@ public class DistanceVectorRouting {
 				}
 				if (routingUpdateInterval < 0 && arg.equals("-i")) {
 					arg = args[++i];
-					if (!isNotNegativeInt(arg)) {
+					if (isNotNegativeInt(arg)) {
 						routingUpdateInterval = Integer.parseInt(arg);
 						continue;
 					}
@@ -70,7 +82,12 @@ public class DistanceVectorRouting {
 			System.out.println("ERROR: Invalid launch parameters.");
 			return;
 		}
-		System.out.println(topologyFileName + " " + routingUpdateInterval);
+
+		File f = new File("D:\\Eclipse Workspaces\\P2P-Chat-Application\\cs4470proj1\\src\\cs4470proj2\\routing.txt");
+		if (f.exists()) {
+
+		}
+
 
 		// Check if the first argument (port number) is a non negative integer.
 		if (!isNotNegativeInt(args[0])) {
@@ -82,22 +99,22 @@ public class DistanceVectorRouting {
 		localPort = (Integer.parseInt(args[0]));
 
 		// Create a new server thread and start it.
-		Server server = new Server(localPort);
-		server.start();
+		InboundConnectionHandler inboundConnectionHandler = new InboundConnectionHandler(localPort);
+		inboundConnectionHandler.start();
 
 		// Create a new client thread and start it.
-		Client client = new Client();
-		client.start();
+		UserInputHandler userInputHandler = new UserInputHandler();
+		userInputHandler.start();
 
 	}
 
 	/** Handles incoming connections. */
-	private static class Server extends Thread {
+	private static class InboundConnectionHandler extends Thread {
 
 		/** The socket on the server that listens for incoming connections. */
 		private ServerSocket listener;
 
-		Server(int port) throws Exception {
+		InboundConnectionHandler(int port) throws Exception {
 			this.listener = new ServerSocket(port);
 		}
 
@@ -115,7 +132,7 @@ public class DistanceVectorRouting {
 
 						// If the connection does not exist yet (to the specific IP and port), then add the connection to the list.
 						if (!connectionExists(socket.getInetAddress())) {
-							Connection connection = new Connection(socket, connections.size());
+							Server connection = new Server(socket, connections.size());
 							connections.add(connection);
 							connection.start();
 						}
@@ -133,7 +150,7 @@ public class DistanceVectorRouting {
 	}
 
 	/**  Handles user input. */
-	private static class Client extends Thread {
+	private static class UserInputHandler extends Thread {
 
 		public void run() {
 			BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
@@ -215,14 +232,19 @@ public class DistanceVectorRouting {
 		}
 	}
 
-	private static class Connection extends Thread {
+	/**
+	 * 
+	 * @author Alvin
+	 *
+	 */
+	private static class Server extends Thread {
 
 		private Socket socket;
 		private BufferedReader in;
 		private PrintWriter out;
 		private int index;
 
-		Connection(Socket socket, int index) throws IOException {
+		Server(Socket socket, int index) throws IOException {
 			this.socket = socket;
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
@@ -275,7 +297,7 @@ public class DistanceVectorRouting {
 		// Check if there are active connections.
 		boolean hasActiveConnections = false;
 		if (connections.size() != 0) {
-			for (Connection connection : connections) {
+			for (Server connection : connections) {
 				if (!connection.socket.isClosed()) {
 					hasActiveConnections = true;
 					break;
@@ -291,7 +313,7 @@ public class DistanceVectorRouting {
 
 		// If there were at least one active connection, then print the list of connections.
 		System.out.println("id:\tIP Address  \tPort No.");
-		for (Connection connection : connections) {
+		for (Server connection : connections) {
 			Socket socket = connection.socket;
 			if (socket.isClosed()) {
 				continue;
@@ -325,7 +347,7 @@ public class DistanceVectorRouting {
 			socket.connect(new InetSocketAddress(destIp, destPort), 2000);
 
 			// Create new Connection and add it to the list.
-			Connection connection = new Connection(socket, connections.size());
+			Server connection = new Server(socket, connections.size());
 			connections.add(connection);
 
 			// Start the connection.
@@ -349,7 +371,7 @@ public class DistanceVectorRouting {
 			System.out.println("Invalid connection ID.");
 			return;
 		}
-		Connection connection = connections.get(Integer.valueOf(args[0]));
+		Server connection = connections.get(Integer.valueOf(args[0]));
 		if (connection.socket.isClosed()) {
 			System.out.println("ERROR: Connection ID " + args[0] + " is closed.");
 			return;
@@ -393,7 +415,7 @@ public class DistanceVectorRouting {
 	 * @return True, if a connection to the IP already exists. False otherwise.
 	 */
 	private static boolean connectionExists(String ip) {
-		for (Connection connection : connections) {
+		for (Server connection : connections) {
 			Socket socket = connection.socket;
 			if (socket.isClosed()) {
 				continue;
@@ -413,7 +435,7 @@ public class DistanceVectorRouting {
 	 * @throws Exception
 	 */
 	private static boolean dropConnection(int id, boolean printError) throws Exception {
-		Connection connection = connections.get(id);
+		Server connection = connections.get(id);
 		if (!connection.socket.isClosed()) {
 			//			connection.out.println(Command.TERMINATE);
 			connection.socket.close();
@@ -508,6 +530,28 @@ public class DistanceVectorRouting {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Parses the topology file and outputs a List of Neighbors.
+	 * Currently, error checking is NOT implemented.
+	 * @param file The topology file.
+	 * @throws Exception 
+	 */
+	private static List<Server> parseTopologyFile(File file) throws Exception {
+		List<Server> neighbors = null;
+		BufferedReader br = new BufferedReader(new FileReader(file.getAbsolutePath()));
+		int lineNumber = 0;
+		while (true) {
+			lineNumber++;
+			String line = br.readLine();
+			if (lineNumber == 1) {
+				// Create new ArrayList with capacity equal to the number of expected servers.
+				neighbors = new ArrayList<>(Integer.parseInt(line));
+			}
+			
+		}
+		return neighbors;
 	}
 
 }
