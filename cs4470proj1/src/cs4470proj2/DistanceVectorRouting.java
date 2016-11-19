@@ -324,11 +324,19 @@ public class DistanceVectorRouting {
 			}
 		}
 
-		public void disconnect() throws IOException {
-			this.connection.socket.close();
-			this.connection.stop = true;
-			this.connection = null;
-			this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+		public void disconnect() {
+			try {
+				this.connection.socket.close();
+				this.connection.stop = true;
+				this.connection = null;
+				this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+			}
+			catch (SocketException e) {
+				System.out.println("WTF");
+			}
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
 		public void send(byte[] message) throws IOException {
