@@ -116,6 +116,16 @@ public class DistanceVectorRouting {
 		UserInputHandler userInputHandler = new UserInputHandler();
 		userInputHandler.start();
 		
+		// Test byte conversion
+//		for (int i = 0; i < 10; i++) {
+//			short asdf = (short)(Math.random() * 30000);
+//			System.out.print("Original: " + asdf + ", ");
+//			byte[] b = shortToByte(asdf);
+//			System.out.print("Bytes: " + b[0] + " " + b[1] + ", ");
+//			short c = (short)byteToInt(b);
+//			System.out.println("Final: " + c + "\n");
+//		}
+		
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new TimerTask() {
 			
@@ -124,6 +134,7 @@ public class DistanceVectorRouting {
 				routingUpdateCountdown -= routingUpateCountdownInterval;
 				if (routingUpdateCountdown <= 0) {
 					try {
+						serverList.checkConnections();
 						sendRoutingUpdate();
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -269,7 +280,8 @@ public class DistanceVectorRouting {
 		private String ipString;
 		private int port;
 		private boolean isNeighbor;
-		private int cost;
+		private int linkCost;
+		private int lowestCost;
 		private Socket socket;
 		private BufferedReader in;
 		private PrintWriter out;
@@ -371,6 +383,64 @@ public class DistanceVectorRouting {
 			}
 		}
 	}
+	
+	/** Data structure for sending routing updates */
+	private static class Message {
+		
+		private byte[] updateFieldsCount;
+		private byte[] serverPort;
+		private byte[] serverIp;
+		private byte[][] servers;
+		
+		public Message(int updateFieldsCount, int serverPort, byte[] serverIp, Server[] servers) throws UnknownHostException {
+			this.updateFieldsCount = shortToByte((short)updateFieldsCount);
+			this.serverPort = shortToByte((short)localPort);
+			this.serverIp = InetAddress.getLocalHost().getAddress();
+			this.servers = new byte[serverList.servers.size() + 1][];
+			this.servers[0] = generateServerByteInfo(InetAddress.getLocalHost(), localPort, serverId, 0);
+			for (int i = 1; i <= serverList.servers.size(); i++) {
+				Server server = serverList.servers.get(i);
+				this.servers[i] = generateServerByteInfo(InetAddress.getByName(server.ipString), server.port, server.serverId, server.lowestCost);
+			}
+		}
+		
+		// Convert the fields in this Message into the byte representation of the message.
+		public byte[] getByteMessage() {
+			byte[] result = concatByteArrays(updateFieldsCount, serverPort);
+			result = concatByteArrays(result, serverIp);
+			for (byte[] server : servers) {
+				result = concatByteArrays(result, server);
+			}
+			return result;
+		}
+		
+		public int getUpdateFieldsCount() {
+			return byteToInt(updateFieldsCount);
+		}
+		
+		private byte[] generateServerByteInfo(InetAddress ip, int port, int id, int cost) {
+			byte[] ipByte = ip.getAddress();
+			byte[] portByte = shortToByte((short)port);
+			byte[] idByte = shortToByte((short)id);
+			byte[] costByte = shortToByte((short)cost);
+			
+			byte[] result = concatByteArrays(ipByte, portByte);
+			result = concatByteArrays(result, new byte[] {0, 0});
+			result = concatByteArrays(result, idByte);
+			result = concatByteArrays(result, costByte);
+			return result;
+		}
+		
+		// Borrowed from http://stackoverflow.com/questions/5368704/appending-a-byte-to-the-end-of-another-byte
+		private byte[] concatByteArrays(byte[] a, byte[] b) {
+			byte[] result = new byte[a.length + b.length]; 
+		    System.arraycopy(a, 0, result, 0, a.length); 
+		    System.arraycopy(b, 0, result, a.length, b.length); 
+		    return result;
+		}
+		
+	}
+	
 
 	private static void printHelp() {
 		System.out.println("Avaiable commands are:");
@@ -429,7 +499,7 @@ public class DistanceVectorRouting {
 			System.out.println("Invalid connection ID.");
 			return;
 		}
-		Server connection = serverList.get(Integer.valueOf(args[0]));
+		Server connection = serverList.servers.get(Integer.valueOf(args[0]));
 		if (connection.socket.isClosed()) {
 			System.out.println("ERROR: Connection ID " + args[0] + " is closed.");
 			return;
@@ -483,7 +553,7 @@ public class DistanceVectorRouting {
 	 * @return True, if a connection to the IP already exists. False otherwise.
 	 */
 	private static boolean connectionExists(String ip) {
-		for (Server connection : serverList) {
+		for (Server connection : serverList.servers) {
 			Socket socket = connection.socket;
 			if (socket.isClosed()) {
 				continue;
@@ -503,7 +573,7 @@ public class DistanceVectorRouting {
 	 * @throws Exception
 	 */
 	private static boolean dropConnection(int id, boolean printError) throws Exception {
-		Server connection = serverList.get(id);
+		Server connection = serverList.servers.get(id);
 		if (!connection.socket.isClosed()) {
 			//			connection.out.println(Command.TERMINATE);
 			connection.socket.close();
@@ -516,7 +586,7 @@ public class DistanceVectorRouting {
 	}
 
 	private static void dropAllConnections() throws Exception {
-		for (int i = 0; i < serverList.size(); i++) {
+		for (int i = 0; i < serverList.servers.size(); i++) {
 			dropConnection(i, false);
 		}
 	}
@@ -530,6 +600,22 @@ public class DistanceVectorRouting {
 			return ip;
 		}
 		return "INVALID IP BYTE LENGTH";
+	}
+	
+	// Converts a short to an array of 2 bytes.
+	private static byte[] shortToByte(short value) {
+		return new byte[] {
+				(byte)((value >> 8) & 0xFF),
+				(byte)((value) & 0xFF)
+		};
+	}
+	
+	// Converts an array to 2 bytes to a int.
+	private static int byteToInt(byte[] value) {
+		if (value.length == 2) {
+			return (((value[0] & 0xFF) << 8) | (value[1] & 0xFF));
+		}
+		return -1;
 	}
 
 	/**
@@ -647,7 +733,7 @@ public class DistanceVectorRouting {
 				String[] neighborInfo = line.split(" ");
 				Server server = findServerById(servers, Integer.parseInt(neighborInfo[1]));
 				if (server != null) {
-					server.cost = Integer.parseInt(neighborInfo[2]);
+					server.linkCost = Integer.parseInt(neighborInfo[2]);
 				}
 			}
 
