@@ -323,6 +323,7 @@ public class DistanceVectorRouting {
 			if (!this.disabled && this.connection != null && this.isNeighbor() && this.connection.socket.isClosed()) {
 				this.disconnect();
 				this.connection = new Connection(socket);
+				this.connection.start();
 			}
 		}
 
@@ -343,8 +344,10 @@ public class DistanceVectorRouting {
 
 		public void send(byte[] message) throws IOException {
 			try {
+				System.out.println("Attempting to send " + message.length + " bytes.");
 				this.connection.out.writeInt(message.length);
 				this.connection.out.write(message);
+				System.out.println("Sent " + message.length + " bytes.");
 			}
 			catch (SocketException e) {
 				this.disconnect();
@@ -378,24 +381,22 @@ public class DistanceVectorRouting {
 		public void run() {
 			while (!stop) {
 				try {
-					String input = this.in.readLine();
-					//					if (input == null) {
-					//						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-					//						System.out.println("Connection was terminated.");
-					//						break;
-					//					}
-					//					else {
-					int length = in.readInt();
-					if(length > 0) {
-						byte[] message = new byte[length];
-						in.readFully(message, 0, message.length);
-						for (byte data : message) {
-							System.out.println(data);
+					//DataInputStream in = new DataInputStream(socket.getInputStream());
+					if (this.in.available() > 0) {
+						int length = in.readInt();
+						System.out.println(length);
+						if(length > 0) {
+							byte[] message = new byte[length];
+							in.readFully(message, 0, message.length);
+							for (byte data : message) {
+								System.out.println(data);
+							}
 						}
 					}
+					//in.close();
 					//					}
 				} catch (IOException e){
-
+					e.printStackTrace();
 				}
 			} 
 		}
@@ -413,6 +414,9 @@ public class DistanceVectorRouting {
 			for (Server server : this.servers) {
 				if (!server.isConnected()) {
 					server.connect();
+				}
+				else {
+					System.out.println("CONNECTED");
 				}
 			}
 		}
@@ -570,13 +574,13 @@ public class DistanceVectorRouting {
 		server.linkCost = newLinkCost;
 		server.calculatedCost = Short.MAX_VALUE;
 	}
-	
+
 	private static void calculateRouting() {
 		synchronized (serverList) {
 			for (Server server : serverList.servers) {
 				server.calculatedCost = Math.min(server.linkCost, server.calculatedCost);
 			}
-			
+
 		}
 	}
 
