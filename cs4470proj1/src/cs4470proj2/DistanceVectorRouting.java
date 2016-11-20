@@ -45,6 +45,11 @@ public class DistanceVectorRouting {
 		public String getName() { return this.name; }
 	}
 
+	private static final int COUNTDOWN_UPDATE_INTERVAL = 100;
+
+	private static final boolean DEBUG = true;
+
+	/** A container for the list of servers */
 	private static ServerList serverList;
 
 	/** The local port being used by the program */
@@ -59,8 +64,6 @@ public class DistanceVectorRouting {
 	/** The countdown before the next routing update */
 	private static long routingUpdateCountdown = -1;
 
-	/** The countdown update interval in miliseconds. */
-	private static int routingUpateCountdownInterval = 100;
 
 	// Main method.
 	public static void main(String[] args) throws Exception {
@@ -133,7 +136,7 @@ public class DistanceVectorRouting {
 
 			@Override
 			public void run() {
-				routingUpdateCountdown -= routingUpateCountdownInterval;
+				routingUpdateCountdown -= COUNTDOWN_UPDATE_INTERVAL;
 				if (routingUpdateCountdown <= 0) {
 					try {
 						serverList.checkConnections();
@@ -144,7 +147,7 @@ public class DistanceVectorRouting {
 					}
 				}
 			}
-		}, routingUpateCountdownInterval, routingUpateCountdownInterval);
+		}, COUNTDOWN_UPDATE_INTERVAL, COUNTDOWN_UPDATE_INTERVAL);
 
 	}
 
@@ -281,14 +284,17 @@ public class DistanceVectorRouting {
 
 		public boolean isConnected() throws IOException {
 			if (this.connection == null) {
+				System.out.println("CONNECTION IS NULL");
 				return false;
 			}
 			if (this.connection.stop) {
-				this.disconnect();
+				System.out.println("connection has been stopped");
+				this.resetConnection();
 				return false;
 			}
 			if (this.connection.socket.isClosed()) {
-				this.disconnect();
+				System.out.println("connectin is closed");
+				this.resetConnection();
 				return false;
 			}
 			return true;
@@ -325,21 +331,21 @@ public class DistanceVectorRouting {
 
 		public void connect(Socket socket) throws IOException {
 			if (!this.disabled && this.isNeighbor() && (this.connection == null || this.connection.socket.isClosed() || !this.connection.socket.isConnected())) {
-				this.disconnect();
+				this.resetConnection();
 				this.connection = new Connection(socket);
 				this.connection.start();
 				System.out.println("CONNECTION ACCEPTED");
 			}
 		}
 
-		public void disconnect() {
+		public void resetConnection() {
 			try {
 				if (this.connection != null) {
 					this.connection.socket.close();
 					this.connection.stop = true;
 					this.connection = null;
 				}
-				this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+				//this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
 			}
 			catch (SocketException e) {
 				System.out.println("cant disconnect?");
@@ -350,24 +356,24 @@ public class DistanceVectorRouting {
 		}
 
 		public void send(byte[] message) throws IOException {
-			//			try {
-			//				System.out.println("Attempting to send " + message.length + " bytes.");
-			//				this.connection.out.writeInt(message.length);
-			//				this.connection.out.write(message);
-			//				System.out.println("Sent " + message.length + " bytes.");
-			//			}
-			//			catch (SocketException e) {
-			//				this.disconnect();
-			//				System.out.println("DISCONNECTED");
-			//			}
-			//			catch (IOException e) {
-			//				e.printStackTrace();
-			//			}
+			try {
+				if (DEBUG) System.out.println("Attempting to send " + message.length + " bytes.");
+				this.connection.out.writeInt(message.length);
+				this.connection.out.write(message);
+				if (DEBUG) System.out.println("Sent " + message.length + " bytes.");
+			}
+			catch (SocketException e) {
+				this.resetConnection();
+				System.out.println("DISCONNECTED");
+			}
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
-		public void send(String message) {
-			this.connection.out.println(message);
-		}
+		//		public void send(String message) {
+		//			this.connection.out.println(message);
+		//		}
 
 		@Override
 		public int compareTo(Server o) {
@@ -378,45 +384,45 @@ public class DistanceVectorRouting {
 	private static class Connection extends Thread {
 
 		private Socket socket;
-		//		private DataInputStream in;
-		private BufferedReader in;
-		// private DataOutputStream out;
-		private PrintWriter out;
+		private DataInputStream in;
+		//		private BufferedReader in;
+		private DataOutputStream out;
+		//private PrintWriter out;
 		private boolean stop;
 
 		Connection(Socket socket) throws IOException {
 			this.socket = socket;
-			//this.in = new DataInputStream(socket.getInputStream());
-			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-			// this.out = new DataOutputStream(socket.getOutputStream());
-			this.out = new PrintWriter(socket.getOutputStream(), true);
+			this.in = new DataInputStream(socket.getInputStream());
+			//			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			this.out = new DataOutputStream(socket.getOutputStream());
+			//this.out = new PrintWriter(socket.getOutputStream(), true);
 			this.stop = false;
 		}
 
 		public void run() {
 			while (!stop) {
 				try {
-					//					DataInputStream in = new DataInputStream(socket.getInputStream());
-					//					if (in.available() > 0) {
-					//						int length = in.readInt();
-					//						System.out.println(length);
-					//						if(length > 0) {
-					//							byte[] message = new byte[length];
-					//							in.readFully(message, 0, message.length);
-					//							for (byte data : message) {
-					//								System.out.println(data);
-					//							}
-					//						}
+					if (in.available() > 0) {
+						int length = in.readInt();
+						if (DEBUG) System.out.print("Received message of size " + length + ": ");
+						if(length > 0) {
+							byte[] message = new byte[length];
+							in.readFully(message, 0, message.length);
+							for (byte data : message) {
+								if (DEBUG) System.out.print(data);
+							}
+							if (DEBUG) System.out.println();
+						}
+					}
+					//					String input = this.in.readLine();
+					//					if (input == null) {
+					//						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+					//						this.stop = true;
+					//						break;
 					//					}
-					String input = this.in.readLine();
-					if (input == null) {
-						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-						this.stop = true;
-						break;
-					}
-					else {
-						System.out.println(input);
-					}
+					//					else {
+					//						System.out.println(input);
+					//					}
 				} catch (IOException e){
 					e.printStackTrace();
 					this.stop = true;
@@ -621,7 +627,8 @@ public class DistanceVectorRouting {
 		//		}
 		for (Server server : serverList.servers) {
 			if (server.isNeighbor() && server.isConnected()) {
-				server.send("WTF IS THIS BULLSHIT");
+				System.out.println("send");
+				server.send(new byte[] {1, 2, 3});
 			}
 		}
 		routingUpdateCountdown = routingUpdateInterval;
