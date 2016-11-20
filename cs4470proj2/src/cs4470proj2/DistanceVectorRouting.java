@@ -17,6 +17,10 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
@@ -46,6 +50,9 @@ public class DistanceVectorRouting {
 		public String getName() { return this.name; }
 	}
 
+	/** How many times the program should attempt to connect to a server before setting its link cost to infinity. */
+	private static final int CONNECTION_ATTEMPTS = 5;
+	
 	private static final int COUNTDOWN_UPDATE_INTERVAL = 100;
 
 	private static final boolean DEBUG = true;
@@ -250,22 +257,23 @@ public class DistanceVectorRouting {
 		private int serverId;
 		private String ipString;
 		private int port;
-		//private boolean isNeighbor;
 		private boolean disabled;
 		private int linkCost;
 		private int calculatedCost;
 		private int nextHopId;
 		private Connection connection;
+		private int connectionAttempts;
+		private Message lastMessage;
 
 		public Server(int id, String ipString, int port) {
 			this.serverId = id;
 			this.ipString = ipString;
 			this.port = port;
-			//this.isNeighbor = false;
 			this.disabled = false;
 			this.calculatedCost = Short.MAX_VALUE;
 			this.linkCost = Short.MAX_VALUE;
 			this.nextHopId = id;
+			this.connectionAttempts = 0;
 		}
 
 		// If the link cost is infinity, then the server is not a neighbor.
@@ -303,7 +311,7 @@ public class DistanceVectorRouting {
 					// Start the connection to the client with a timeout of 2 seconds.
 					socket.connect(new InetSocketAddress(this.ipString, this.port), 2000);
 
-					this.connection = new Connection(socket);
+					this.connection = new Connection(socket, this);
 					this.connection.start();
 
 				}
@@ -325,7 +333,7 @@ public class DistanceVectorRouting {
 		public void connect(Socket socket) throws IOException {
 			if (!this.disabled && this.isNeighbor() && (this.connection == null || this.connection.socket.isClosed() || !this.connection.socket.isConnected())) {
 				this.resetConnection();
-				this.connection = new Connection(socket);
+				this.connection = new Connection(socket, this);
 				this.connection.start();
 				System.out.println("CONNECTION ACCEPTED");
 			}
@@ -338,7 +346,10 @@ public class DistanceVectorRouting {
 					this.connection.stop = true;
 					this.connection = null;
 				}
-				//this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+				this.connectionAttempts++;
+				if (this.connectionAttempts == CONNECTION_ATTEMPTS) {
+					this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+				}
 			}
 			catch (SocketException e) {
 				System.out.println("cant disconnect?");
@@ -363,10 +374,6 @@ public class DistanceVectorRouting {
 			}
 		}
 
-		//		public void send(String message) {
-		//			this.connection.out.println(message);
-		//		}
-
 		@Override
 		public int compareTo(Server o) {
 			return this.serverId - o.serverId;
@@ -379,12 +386,14 @@ public class DistanceVectorRouting {
 		private DataInputStream in;
 		private DataOutputStream out;
 		private boolean stop;
+		private Server server; // Reference to the parent server.
 
-		Connection(Socket socket) throws IOException {
+		Connection(Socket socket, Server server) throws IOException {
 			this.socket = socket;
 			this.in = new DataInputStream(socket.getInputStream());
 			this.out = new DataOutputStream(socket.getOutputStream());
 			this.stop = false;
+			this.server = server;
 		}
 
 		public void run() {
@@ -392,12 +401,9 @@ public class DistanceVectorRouting {
 				try {
 					if (in.available() > 0) {
 						int length = in.readInt();
-						if (DEBUG) 
 						if(length > 0) {
 							byte[] byteMessage = new byte[length];
 							in.readFully(byteMessage, 0, byteMessage.length);
-							if (DEBUG) {
-							}
 							Message message = Message.getMessageFromBytes(byteMessage);
 							if (DEBUG) {
 								System.out.print("DEBUG: Received message containing " + length + " bytes from " + InetAddress.getByAddress(message.serverIp).getHostAddress() + ":" + byteToInt(message.serverPort) + ":\n\t");
@@ -409,6 +415,7 @@ public class DistanceVectorRouting {
 									System.out.println("\tID: " + message.getServerIdByIndex(i) + ", IP: " + InetAddress.getByAddress(message.getServerIpByIndex(i)).getHostAddress() + ", Port: " + message.getServerPortByIndex(i) + ", Cost: " + message.getServerCostByIndex(i));
 								}
 							}
+							this.server.lastMessage = message;
 						}
 					}
 				} catch (IOException e){
@@ -553,6 +560,15 @@ public class DistanceVectorRouting {
 				return byteToInt(Arrays.copyOfRange(this.servers[index], 10, 12));
 			}
 		}
+		
+		public int getServerCostById(int id) {
+			for (int i = 0; i < this.servers.length; i++) {
+				if (byteToInt(Arrays.copyOfRange(this.servers[i], 8, 10)) == id) {
+					return byteToInt(Arrays.copyOfRange(this.servers[i], 10, 12));
+				}
+			}
+			return Short.MAX_VALUE;
+		}
 
 		private byte[] generateServerByteInfo(InetAddress ip, int port, int id, int cost) {
 			byte[] ipByte = ip.getAddress();
@@ -651,13 +667,44 @@ public class DistanceVectorRouting {
 			return;
 		}
 		server.linkCost = newLinkCost;
-		server.calculatedCost = Short.MAX_VALUE;
+		
+		// Also reset the calculate cost and next-hop ID.
+		server.calculatedCost = newLinkCost;
+		server.nextHopId = serverId;
 	}
 
+	/** Implementation of Bellman-Ford algorithm */
 	private static void calculateRouting() {
 		synchronized (serverList) {
+			
+			// Calculate the cost for each of the servers.
 			for (Server server : serverList.servers) {
-				server.calculatedCost = Math.min(server.linkCost, server.calculatedCost);
+				
+				// Set the initial minimum cost amount and next-hop to the previously calculated values.
+				int minCost = server.calculatedCost;
+				int minCostId = server.nextHopId;
+				
+				// Go through the list of neighboring servers to check their cost to the destination.
+				for (Server neighbor : serverList.servers) {
+					
+					// If the server is not a neighbor, then continue to the next server.
+					if (!neighbor.isNeighbor()) {
+						continue;
+					}
+					
+					Message message = neighbor.lastMessage;
+					if (message != null) {
+						
+						// The cost of this route is the sum of the link cost to the neighbor and the cost from the neighbor to the destination.
+						int cost = neighbor.linkCost + message.getServerCostById(server.serverId);
+						if (cost < minCost) {
+							minCost = cost;
+							minCostId = neighbor.serverId;
+						}
+					}
+				}
+				server.calculatedCost = minCost;
+				server.nextHopId = minCostId;
 			}
 
 		}
