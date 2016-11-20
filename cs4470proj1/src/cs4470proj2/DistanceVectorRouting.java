@@ -283,6 +283,10 @@ public class DistanceVectorRouting {
 			if (this.connection == null) {
 				return false;
 			}
+			if (this.connection.stop) {
+				this.disconnect();
+				return false;
+			}
 			if (this.connection.socket.isClosed()) {
 				this.disconnect();
 				return false;
@@ -320,7 +324,7 @@ public class DistanceVectorRouting {
 		}
 
 		public void connect(Socket socket) throws IOException {
-			if (!this.disabled && this.isNeighbor() && (this.connection == null || this.connection.socket.isClosed() || this.connection.socket.isConnected())) {
+			if (!this.disabled && this.isNeighbor() && (this.connection == null || this.connection.socket.isClosed() || !this.connection.socket.isConnected())) {
 				this.disconnect();
 				this.connection = new Connection(socket);
 				this.connection.start();
@@ -406,8 +410,8 @@ public class DistanceVectorRouting {
 					//					}
 					String input = this.in.readLine();
 					if (input == null) {
-						//this.socket.close(); // Receiving a null message means the other end of the socket was closed.
-						System.out.println("FUCK YOU");
+						this.socket.close(); // Receiving a null message means the other end of the socket was closed.
+						this.stop = true;
 						break;
 					}
 					else {
@@ -415,6 +419,7 @@ public class DistanceVectorRouting {
 					}
 				} catch (IOException e){
 					e.printStackTrace();
+					this.stop = true;
 				}
 			} 
 		}
