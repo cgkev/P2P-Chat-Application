@@ -16,6 +16,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
@@ -120,16 +121,6 @@ public class DistanceVectorRouting {
 		// Create a new client thread and start it.
 		UserInputHandler userInputHandler = new UserInputHandler();
 		userInputHandler.start();
-
-		// Test byte conversion
-		//		for (int i = 0; i < 10; i++) {
-		//			short asdf = (short)(Math.random() * 30000);
-		//			System.out.print("Original: " + asdf + ", ");
-		//			byte[] b = shortToByte(asdf);
-		//			System.out.print("Bytes: " + b[0] + " " + b[1] + ", ");
-		//			short c = (short)byteToInt(b);
-		//			System.out.println("Final: " + c + "\n");
-		//		}
 
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new TimerTask() {
@@ -357,10 +348,9 @@ public class DistanceVectorRouting {
 
 		public void send(byte[] message) throws IOException {
 			try {
-				if (DEBUG) System.out.println("Attempting to send " + message.length + " bytes.");
 				this.connection.out.writeInt(message.length);
 				this.connection.out.write(message);
-				if (DEBUG) System.out.println("Sent " + message.length + " bytes.");
+				if (DEBUG) System.out.println("DEBUG: Sent " + message.length + " bytes to " + this.ipString + ":" + this.port + ".");
 			}
 			catch (SocketException e) {
 				this.resetConnection();
@@ -400,14 +390,23 @@ public class DistanceVectorRouting {
 				try {
 					if (in.available() > 0) {
 						int length = in.readInt();
-						if (DEBUG) System.out.print("DEBUG: Received message of size " + length + ": \n\t");
+						if (DEBUG) 
 						if(length > 0) {
-							byte[] message = new byte[length];
-							in.readFully(message, 0, message.length);
-							for (byte data : message) {
-								if (DEBUG) System.out.print(data + " ");
+							byte[] byteMessage = new byte[length];
+							in.readFully(byteMessage, 0, byteMessage.length);
+							if (DEBUG) {
 							}
-							if (DEBUG) System.out.println();
+							Message message = Message.getMessageFromBytes(byteMessage);
+							if (DEBUG) {
+								System.out.print("DEBUG: Received message containing " + length + " bytes from " + InetAddress.getByAddress(message.serverIp).getHostAddress() + ":" + byteToInt(message.serverPort) + ":\n\t");
+								for (byte data : byteMessage) {
+									System.out.print(data + " ");
+								}
+								System.out.println();
+								for (int i = 0; i < message.servers.length; i++) {
+									System.out.println("\tID: " + message.getServerIdByIndex(i) + ", IP: " + InetAddress.getByAddress(message.getServerIpByIndex(i)).getHostAddress() + ", Port: " + message.getServerPortByIndex(i) + ", Cost: " + message.getServerCostByIndex(i));
+								}
+							}
 						}
 					}
 				} catch (IOException e){
@@ -427,7 +426,6 @@ public class DistanceVectorRouting {
 		}
 
 		public void checkConnections() throws IOException {
-			System.out.println(this.servers.size());
 			for (Server server : this.servers) {
 				if (!server.isConnected()) {
 					if (DEBUG) System.out.println("DEBUG: Attempting to connect to " + server.ipString + ":" + server.port +".");
@@ -464,6 +462,10 @@ public class DistanceVectorRouting {
 		private byte[] serverIp;
 		private byte[][] servers;
 
+		private Message() {
+
+		}
+
 		public Message(int updateFieldsCount, int serverPort, byte[] serverIp, Server[] servers) throws UnknownHostException {
 			this.updateFieldsCount = shortToByte((short)updateFieldsCount);
 			this.serverPort = shortToByte((short)localPort);
@@ -476,7 +478,7 @@ public class DistanceVectorRouting {
 			}
 		}
 
-		// Convert the fields in this Message into the byte representation of the message.
+		/** Converts the fields in this Message into the byte representation of the message. */
 		public byte[] getByteMessage() {
 			byte[] result = concatByteArrays(updateFieldsCount, serverPort);
 			result = concatByteArrays(result, serverIp);
@@ -486,8 +488,69 @@ public class DistanceVectorRouting {
 			return result;
 		}
 
-		public int getUpdateFieldsCount() {
-			return byteToInt(updateFieldsCount);
+		/** Converts a byte array back into a Message */
+		public static Message getMessageFromBytes(byte[] byteMessage) {
+			if (byteMessage.length < 20) {
+				if (DEBUG) System.out.println("DEBUG: Message length of " + byteMessage.length + " is too short.");
+				return null;
+			}
+			if (byteMessage.length % 4 != 0) {
+				if (DEBUG) System.out.println("DEBUG: Message length of " + byteMessage.length + " is invalid.");
+				return null;
+			}
+			Message message = new Message();
+			message.updateFieldsCount = Arrays.copyOfRange(byteMessage, 0, 2);
+			message.serverPort = Arrays.copyOfRange(byteMessage, 2, 4);
+			message.serverIp = Arrays.copyOfRange(byteMessage, 4, 8);
+			message.servers = new byte[byteToInt(message.updateFieldsCount)][];
+			for (int i = 0; i < message.servers.length; i++) {
+				message.servers[i] = Arrays.copyOfRange(byteMessage, 8 + i * 12, 20 + i * 12);
+			}
+			return message;
+		}
+
+		public int getUpdateFieldsCountInt() {
+			return byteToInt(this.updateFieldsCount);
+		}
+
+		public int getServerPortInt() {
+			return byteToInt(this.serverPort);
+		}
+
+		public byte[] getServerIpByIndex(int index) {
+			if (index < -1 || index > servers.length - 1) {
+				return new byte[4];
+			}
+			else {
+				return Arrays.copyOfRange(this.servers[index], 0, 4);
+			}
+		}
+
+		public int getServerPortByIndex(int index) {
+			if (index < -1 || index > servers.length - 1) {
+				return -1;
+			}
+			else {
+				return byteToInt(Arrays.copyOfRange(this.servers[index], 4, 6));
+			}
+		}
+
+		public int getServerIdByIndex(int index) {
+			if (index < -1 || index > servers.length - 1) {
+				return -1;
+			}
+			else {
+				return byteToInt(Arrays.copyOfRange(this.servers[index], 8, 10));
+			}
+		}
+
+		public int getServerCostByIndex(int index) {
+			if (index < -1 || index > servers.length - 1) {
+				return -1;
+			}
+			else {
+				return byteToInt(Arrays.copyOfRange(this.servers[index], 10, 12));
+			}
 		}
 
 		private byte[] generateServerByteInfo(InetAddress ip, int port, int id, int cost) {
@@ -603,17 +666,10 @@ public class DistanceVectorRouting {
 		Message message = new Message(serverList.servers.size() + 1, localPort, InetAddress.getLocalHost().getAddress(), serverList.servers.toArray(new Server[serverList.servers.size()]));
 		byte[] byteMessage = message.getByteMessage();
 		for (Server server : serverList.servers) {
-			System.out.println(server.isConnected());
 			if (server.isNeighbor() && server.isConnected()) {
 				server.send(byteMessage);
 			}
 		}
-		//		for (Server server : serverList.servers) {
-		//			if (server.isNeighbor() && server.isConnected()) {
-		//				System.out.println("send");
-		//				server.send(new byte[] {1, 2, 3});
-		//			}
-		//		}
 		routingUpdateCountdown = routingUpdateInterval;
 	}
 
@@ -830,12 +886,6 @@ public class DistanceVectorRouting {
 
 			}
 			else if (lineNumber > 2 + expectedServerCount) {
-				//				String[] neighborInfo = line.split(" ");
-				//				Server server = serverList.findById(Integer.parseInt(neighborInfo[1]));
-				//				if (server != null) {
-				//					server.linkCost = Integer.parseInt(neighborInfo[2]);
-				//					server.calculatedCost = server.linkCost;
-				//				}
 				updateLinkCost(line);
 			}
 
