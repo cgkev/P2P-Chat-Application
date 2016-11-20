@@ -39,8 +39,8 @@ public class DistanceVectorRouting {
 		DISPLAY		("display"),
 		UPDATE		("update"),
 		SEND		("send"),
-		DISABLE	("terminate"),
-		CRASH		("exit");
+		DISABLE		("diable"),
+		CRASH		("crash");
 		private String name;
 		private Token(String name) { this.name = name; }
 		public String getName() { return this.name; }
@@ -275,16 +275,16 @@ public class DistanceVectorRouting {
 
 		public boolean isConnected() throws IOException {
 			if (this.connection == null) {
-				System.out.println("CONNECTION IS NULL");
+//				System.out.println("CONNECTION IS NULL");
 				return false;
 			}
 			if (this.connection.stop) {
-				System.out.println("connection has been stopped");
+//				System.out.println("connection has been stopped");
 				this.resetConnection();
 				return false;
 			}
 			if (this.connection.socket.isClosed()) {
-				System.out.println("connectin is closed");
+//				System.out.println("connectin is closed");
 				this.resetConnection();
 				return false;
 			}
@@ -295,6 +295,8 @@ public class DistanceVectorRouting {
 			if (!this.disabled && this.isNeighbor() && this.connection == null) {
 				try {
 
+					if (DEBUG) System.out.println("DEBUG: Attempting to connect to " + this.ipString + ":" + this.port +".");
+					
 					// Create a new socket, but do not start its connection yet.
 					Socket socket = new Socket();
 
@@ -428,7 +430,6 @@ public class DistanceVectorRouting {
 		public void checkConnections() throws IOException {
 			for (Server server : this.servers) {
 				if (!server.isConnected()) {
-					if (DEBUG) System.out.println("DEBUG: Attempting to connect to " + server.ipString + ":" + server.port +".");
 					server.connect();
 				}
 			}
