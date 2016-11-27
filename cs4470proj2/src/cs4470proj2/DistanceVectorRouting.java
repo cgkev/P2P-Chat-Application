@@ -45,6 +45,7 @@ public class DistanceVectorRouting {
 		STEP		("step"),
 		DISABLE		("disable"),
 		CRASH		("crash"),
+		PACKETS		("packets"),
 		EXIT		("exit");
 		private String name;
 		private Token(String name) { this.name = name; }
@@ -202,6 +203,12 @@ public class DistanceVectorRouting {
 						// help protocol
 						if (commandMatch(input, Token.HELP.getName())) {
 							printHelp();
+						}
+						
+						// packets protocol
+						if (commandMatch(input, Token.PACKETS.getName())) {
+							System.out.println(messageCount);
+							
 						}
 
 						// myip protocol
