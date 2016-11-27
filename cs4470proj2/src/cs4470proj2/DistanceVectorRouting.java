@@ -330,6 +330,7 @@ public class DistanceVectorRouting {
 					this.connection = new Connection(socket, this);
 					this.connection.start();
 					this.connectionInitialized = true;
+					this.connectionAttempts = 0;
 				}
 				catch (UnknownHostException e) {
 					System.out.println("ERROR: Attempted to connected to unknown host.");
@@ -352,6 +353,7 @@ public class DistanceVectorRouting {
 				this.connection = new Connection(socket, this);
 				this.connection.start();
 				this.connectionInitialized = true;
+				this.connectionAttempts = 0;
 				System.out.println("CONNECTION ACCEPTED");
 			}
 		}
@@ -382,7 +384,7 @@ public class DistanceVectorRouting {
 			try {
 				this.connection.out.writeInt(message.length);
 				this.connection.out.write(message);
-				if (DEBUG) System.out.println("DEBUG: Sent " + message.length + " bytes to " + this.ipString + ":" + this.port + ".");
+				if (DEBUG) System.out.println("DEBUG: Sent " + message.length + " bytes to " + this.ipString + ":" + this.port + ", ID " + this.serverId + ".");
 			}
 			catch (SocketException e) {
 				this.resetConnection();
@@ -425,7 +427,7 @@ public class DistanceVectorRouting {
 							in.readFully(byteMessage, 0, byteMessage.length);
 							Message message = Message.getMessageFromBytes(byteMessage);
 							if (DEBUG) {
-								System.out.print("DEBUG: Received message containing " + length + " bytes from " + InetAddress.getByAddress(message.serverIp).getHostAddress() + ":" + byteToInt(message.serverPort) + ":\n\t");
+								System.out.print("DEBUG: Received message containing " + length + " bytes from " + InetAddress.getByAddress(message.serverIp).getHostAddress() + ":" + byteToInt(message.serverPort) + ", ID " + this.server.serverId + ":\n\t");
 								for (byte data : byteMessage) {
 									System.out.print(data + " ");
 								}
