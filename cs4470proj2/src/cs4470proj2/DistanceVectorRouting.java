@@ -626,6 +626,10 @@ public class DistanceVectorRouting {
 			String cost = (server.calculatedCost == Short.MAX_VALUE ? "infinity" : String.valueOf(server.calculatedCost));
 			System.out.println(" " + server.serverId + "\t\t " + server.nextHopId + "\t\t " + cost);
 		}
+		if (!printedThisServer) {
+			System.out.println(" " + serverId + "\t\t " + serverId + "\t\t 0");
+			printedThisServer = true;
+		}
 
 	}
 
