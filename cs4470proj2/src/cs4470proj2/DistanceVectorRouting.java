@@ -46,7 +46,8 @@ public class DistanceVectorRouting {
 		DISABLE		("disable"),
 		CRASH		("crash"),
 		PACKETS		("packets"),
-		EXIT		("exit");
+		EXIT		("exit"),
+		COST		("cost");
 		private String name;
 		private Token(String name) { this.name = name; }
 		public String getName() { return this.name; }
@@ -208,9 +209,8 @@ public class DistanceVectorRouting {
 						// packets protocol
 						if (commandMatch(input, Token.PACKETS.getName())) {
 							System.out.println(messageCount);
-							
 						}
-
+						
 						// myip protocol
 						else if (commandMatch(input, Token.MYIP.getName())) {
 							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()));
@@ -221,6 +221,13 @@ public class DistanceVectorRouting {
 							System.out.println(localPort);
 						}
 
+						// cost protocol (for debug)
+						else if (DEBUG && commandMatch(input, Token.COST.getName())) {
+							for (Server server : serverList.servers) {
+								System.out.println(server.serverId + " : " + server.linkCost);
+							}
+						}
+						
 						// display protocol
 						else if (commandMatch(input, Token.DISPLAY.getName())) {
 							printList(); 
@@ -326,7 +333,7 @@ public class DistanceVectorRouting {
 			if (!this.disabled && this.isNeighbor() && this.connection == null) {
 				try {
 
-					if (DEBUG) System.out.println("DEBUG: Attempting to connect to " + this.ipString + ":" + this.port +".");
+					if (DEBUG) System.out.println("DEBUG: Attempting to connect to " + this.ipString + ":" + this.port +", ID " + this.serverId + ".");
 
 					// Create a new socket, but do not start its connection yet.
 					Socket socket = new Socket();
@@ -336,20 +343,25 @@ public class DistanceVectorRouting {
 
 					this.connection = new Connection(socket, this);
 					this.connection.start();
-					this.connectionInitialized = true;
-					this.connectionAttempts = 0;
+					
 				}
 				catch (UnknownHostException e) {
 					System.out.println("ERROR: Attempted to connected to unknown host.");
 				}
 				catch (ConnectException e) {
-					System.out.println("ERROR: Could not connect.");
+					this.connectionAttempts++;
+					checkConnectionAttempts();
+					System.out.println("ERROR: Could not connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
 				}
 				catch (SocketTimeoutException e) {
-					System.out.println("ERROR: Timed out while attempting to connect.");
+					this.connectionAttempts++;
+					checkConnectionAttempts();
+					System.out.println("ERROR: Timed out while attempting to connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
 				}
 				catch (Exception e) {
-					System.out.println("ERROR: Could not connect.");
+					this.connectionAttempts++;
+					checkConnectionAttempts();
+					System.out.println("ERROR: Could not connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
 				}
 			}
 		}
@@ -359,9 +371,9 @@ public class DistanceVectorRouting {
 				this.resetConnection();
 				this.connection = new Connection(socket, this);
 				this.connection.start();
-				this.connectionInitialized = true;
-				this.connectionAttempts = 0;
-				System.out.println("CONNECTION ACCEPTED");
+			}
+			else {
+				socket.close();
 			}
 		}
 
@@ -373,11 +385,7 @@ public class DistanceVectorRouting {
 					this.connection = null;
 				}
 				this.connectionAttempts++;
-				// If the server had been previously connected, but now can't connect after a certain amount of attempts, then it is considered to be disconnected.
-				if (this.connectionInitialized && this.connectionAttempts == CONNECTION_ATTEMPTS) {
-					this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
-					this.calculatedCost = Short.MAX_VALUE;
-				}
+				checkConnectionAttempts();
 			}
 			catch (SocketException e) {
 				System.out.println("cant disconnect?");
@@ -399,6 +407,22 @@ public class DistanceVectorRouting {
 			}
 			catch (IOException e) {
 				e.printStackTrace();
+			}
+		}
+		
+		// If the server had been previously connected, but now can't connect after a certain amount of attempts, then it is considered to be disconnected.
+		private void checkConnectionAttempts() {
+			if (this.connectionAttempts >= CONNECTION_ATTEMPTS) {
+				if (this.connectionInitialized) {
+					System.out.println("Server " + this.serverId + " could not be reconnected to and is no longer a neighbor.");
+				}
+				else {
+					System.out.println("Server " + this.serverId + " could not be connected to and is no longer a neighbor.");
+				}
+				this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
+//				this.calculatedCost = Short.MAX_VALUE;
+//				this.nextHopId = this.serverId;
+				resetCalculatedCosts();
 			}
 		}
 
@@ -428,6 +452,8 @@ public class DistanceVectorRouting {
 			while (!stop) {
 				try {
 					if (in.available() > 0) {
+						this.server.connectionInitialized = true;
+						this.server.connectionAttempts = 0;
 						int length = in.readInt();
 						if(length > 0) {
 							byte[] byteMessage = new byte[length];
@@ -448,7 +474,7 @@ public class DistanceVectorRouting {
 						}
 					}
 				} catch (IOException e){
-					if (DEBUG) System.out.println("DEBUG: Socket connection was lost.");
+					if (DEBUG) System.out.println("DEBUG: Socket connection to server " + this.server.serverId + " was lost.");
 					this.stop = true;
 				}
 			} 
@@ -699,8 +725,16 @@ public class DistanceVectorRouting {
 		server.linkCost = newLinkCost;
 
 		// Also reset the calculate cost and next-hop ID.
-		server.calculatedCost = Short.MAX_VALUE;
-		server.nextHopId = serverId;
+		resetCalculatedCosts();
+		
+		System.out.println("Updated server ID " + server.serverId + " link cost to " + newLinkCost);
+	}
+	
+	private static void resetCalculatedCosts() {
+		for (Server server : serverList.servers) {
+			server.calculatedCost = Short.MAX_VALUE;
+			server.nextHopId = server.serverId;
+		}
 	}
 
 	/** Implementation of Bellman-Ford algorithm */
@@ -712,7 +746,7 @@ public class DistanceVectorRouting {
 
 				// Set the initial minimum cost amount and next-hop to the previously calculated values.
 				int minCost = server.calculatedCost;
-				int minCostId = server.nextHopId;
+				int minCostId = server.serverId;
 
 				// Go through the list of neighboring servers to check their cost to the destination.
 				for (Server neighbor : serverList.servers) {
@@ -782,7 +816,11 @@ public class DistanceVectorRouting {
 		Server server = serverList.findById(id);
 		if (server != null) { 
 			if (server.isConnected()) {
-				server.resetConnection();
+				server.connection.socket.close();
+				server.connection.stop = true;
+				server.connection = null;
+				server.linkCost = Short.MAX_VALUE;
+				server.calculatedCost = Short.MAX_VALUE;
 				server.disabled = true;
 				return true;
 			}
@@ -797,8 +835,8 @@ public class DistanceVectorRouting {
 	}
 
 	private static void dropAllConnections() throws Exception {
-		for (int i = 0; i < serverList.servers.size(); i++) {
-			dropConnection(i, false);
+		for (Server server : serverList.servers) {
+			dropConnection(server.serverId, false);
 		}
 	}
 
