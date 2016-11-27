@@ -617,13 +617,11 @@ public class DistanceVectorRouting {
 
 	private static void printHelp() {
 		System.out.println("Avaiable commands are:");
-		System.out.println("\"myip\"");
-		System.out.println("\"myport\"");
-		System.out.println("\"connect <destination> <port no>\"");
-		System.out.println("\"list\"");
-		System.out.println("\"terminate <connection id.>\"");
-		System.out.println("\"send <connection id.> <message>\"");
-		System.out.println("\"exit\"");
+		System.out.println("\"step\"");
+		System.out.println("\"packets\"");
+		System.out.println("\"display\"");
+		System.out.println("\"disable <server-ID>\"");
+		System.out.println("\"crash\"");
 		System.out.println();
 	}
 
