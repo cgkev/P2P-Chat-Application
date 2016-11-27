@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -17,10 +16,6 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeSet;
@@ -54,11 +49,11 @@ public class DistanceVectorRouting {
 	}
 
 	/** How many times the program should attempt to connect to a server before setting its link cost to infinity. */
-	private static final int CONNECTION_ATTEMPTS = 3;
+	private static final int CONNECTION_ATTEMPTS = 4;
 
 	private static final int COUNTDOWN_UPDATE_INTERVAL = 100;
 
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 
 	/** A container for the list of servers */
 	private static ServerList serverList;
@@ -208,7 +203,8 @@ public class DistanceVectorRouting {
 
 						// packets protocol
 						if (commandMatch(input, Token.PACKETS.getName())) {
-							System.out.println(messageCount);
+							System.out.println(messageCount + "packets received since last check.");
+							messageCount = 0;
 						}
 
 						// myip protocol
@@ -222,7 +218,7 @@ public class DistanceVectorRouting {
 						}
 
 						// cost protocol (for debug)
-						else if (DEBUG && commandMatch(input, Token.COST.getName())) {
+						else if (commandMatch(input, Token.COST.getName())) {
 							for (Server server : serverList.servers) {
 								System.out.println(server.serverId + " : " + server.linkCost);
 							}
@@ -346,22 +342,24 @@ public class DistanceVectorRouting {
 
 				}
 				catch (UnknownHostException e) {
+					this.connectionAttempts++;
 					System.out.println("ERROR: Attempted to connected to unknown host.");
+					checkConnectionAttempts();
 				}
 				catch (ConnectException e) {
 					this.connectionAttempts++;
-					checkConnectionAttempts();
 					System.out.println("ERROR: Could not connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
+					checkConnectionAttempts();
 				}
 				catch (SocketTimeoutException e) {
 					this.connectionAttempts++;
-					checkConnectionAttempts();
 					System.out.println("ERROR: Timed out while attempting to connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
+					checkConnectionAttempts();
 				}
 				catch (Exception e) {
 					this.connectionAttempts++;
-					checkConnectionAttempts();
 					System.out.println("ERROR: Could not connect to ID " + this.serverId + ". Attempted " + this.connectionAttempts + " times.");
+					checkConnectionAttempts();
 				}
 			}
 		}
@@ -402,8 +400,8 @@ public class DistanceVectorRouting {
 				if (DEBUG) System.out.println("DEBUG: Sent " + message.length + " bytes to " + this.ipString + ":" + this.port + ", ID " + this.serverId + ".");
 			}
 			catch (SocketException e) {
+				System.out.println("ERROR: Connection to server " + this.serverId + " was lost. Attempted to reconnect " + (this.connectionAttempts + 1) + " times.");
 				this.resetConnection();
-				System.out.println("DISCONNECTED");
 			}
 			catch (IOException e) {
 				e.printStackTrace();
@@ -570,14 +568,6 @@ public class DistanceVectorRouting {
 				message.servers[i] = Arrays.copyOfRange(byteMessage, 8 + i * 12, 20 + i * 12);
 			}
 			return message;
-		}
-
-		public int getUpdateFieldsCountInt() {
-			return byteToInt(this.updateFieldsCount);
-		}
-
-		public int getServerPortInt() {
-			return byteToInt(this.serverPort);
 		}
 
 		public byte[] getServerIpByIndex(int index) {
@@ -769,7 +759,7 @@ public class DistanceVectorRouting {
 							}
 						}
 
-						else if (cost < minCost) {
+						if (cost < minCost) {
 							minCost = cost;
 							minCostId = neighbor.serverId;
 						}
@@ -990,8 +980,8 @@ public class DistanceVectorRouting {
 			else if (lineNumber > 2 + expectedServerCount) {
 				updateLinkCost(line);
 			}
-
 		}
+		br.close();
 	}
 
 }
