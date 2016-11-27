@@ -351,6 +351,7 @@ public class DistanceVectorRouting {
 				this.resetConnection();
 				this.connection = new Connection(socket, this);
 				this.connection.start();
+				this.connectionInitialized = true;
 				System.out.println("CONNECTION ACCEPTED");
 			}
 		}
@@ -691,7 +692,7 @@ public class DistanceVectorRouting {
 		server.linkCost = newLinkCost;
 
 		// Also reset the calculate cost and next-hop ID.
-		server.calculatedCost = newLinkCost;
+		server.calculatedCost = Short.MAX_VALUE;
 		server.nextHopId = serverId;
 	}
 
@@ -774,9 +775,7 @@ public class DistanceVectorRouting {
 		Server server = serverList.findById(id);
 		if (server != null) { 
 			if (server.isConnected()) {
-				server.connection.socket.close();
-				server.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
-				server.calculatedCost = Short.MAX_VALUE;
+				server.resetConnection();
 				server.disabled = true;
 				return true;
 			}
