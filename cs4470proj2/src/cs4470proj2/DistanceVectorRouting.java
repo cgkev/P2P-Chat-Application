@@ -74,7 +74,7 @@ public class DistanceVectorRouting {
 
 	/** The countdown before the next routing update */
 	private static long routingUpdateCountdown = -1;
-	
+
 	private static int messageCount;
 
 
@@ -205,12 +205,12 @@ public class DistanceVectorRouting {
 						if (commandMatch(input, Token.HELP.getName())) {
 							printHelp();
 						}
-						
+
 						// packets protocol
 						if (commandMatch(input, Token.PACKETS.getName())) {
 							System.out.println(messageCount);
 						}
-						
+
 						// myip protocol
 						else if (commandMatch(input, Token.MYIP.getName())) {
 							System.out.println(ipByteToString(InetAddress.getLocalHost().getAddress()));
@@ -227,7 +227,7 @@ public class DistanceVectorRouting {
 								System.out.println(server.serverId + " : " + server.linkCost);
 							}
 						}
-						
+
 						// display protocol
 						else if (commandMatch(input, Token.DISPLAY.getName())) {
 							printList(); 
@@ -237,7 +237,7 @@ public class DistanceVectorRouting {
 						else if (commandMatch(input, Token.UPDATE.getName())) {
 							updateLinkCost(input.replace(Token.UPDATE.getName(), ""));
 						}
-						
+
 						// step protocol
 						else if (commandMatch(input, Token.STEP.getName())) {
 							sendRoutingUpdate();
@@ -253,7 +253,7 @@ public class DistanceVectorRouting {
 							dropAllConnections();
 							System.out.println("Closed all connections. There are no more neighbors. You can reconnect to servers by updating the cost to a server.");
 						}
-						
+
 						// exit protocol
 						else if (commandMatch(input, Token.CRASH.getName())) {
 							dropAllConnections();
@@ -343,7 +343,7 @@ public class DistanceVectorRouting {
 
 					this.connection = new Connection(socket, this);
 					this.connection.start();
-					
+
 				}
 				catch (UnknownHostException e) {
 					System.out.println("ERROR: Attempted to connected to unknown host.");
@@ -409,7 +409,7 @@ public class DistanceVectorRouting {
 				e.printStackTrace();
 			}
 		}
-		
+
 		// If the server had been previously connected, but now can't connect after a certain amount of attempts, then it is considered to be disconnected.
 		private void checkConnectionAttempts() {
 			if (this.connectionAttempts >= CONNECTION_ATTEMPTS) {
@@ -420,8 +420,8 @@ public class DistanceVectorRouting {
 					System.out.println("Server " + this.serverId + " could not be connected to and is no longer a neighbor.");
 				}
 				this.linkCost = Short.MAX_VALUE; // The disconnected server will no longer be a neighbor.
-//				this.calculatedCost = Short.MAX_VALUE;
-//				this.nextHopId = this.serverId;
+				//				this.calculatedCost = Short.MAX_VALUE;
+				//				this.nextHopId = this.serverId;
 				resetCalculatedCosts();
 			}
 		}
@@ -726,10 +726,10 @@ public class DistanceVectorRouting {
 
 		// Also reset the calculate cost and next-hop ID.
 		resetCalculatedCosts();
-		
+
 		System.out.println("Updated server ID " + server.serverId + " link cost to " + newLinkCost);
 	}
-	
+
 	private static void resetCalculatedCosts() {
 		for (Server server : serverList.servers) {
 			server.calculatedCost = Short.MAX_VALUE;
@@ -761,7 +761,15 @@ public class DistanceVectorRouting {
 
 						// The cost of this route is the sum of the link cost to the neighbor and the cost from the neighbor to the destination.
 						int cost = neighbor.linkCost + message.getServerCostById(server.serverId);
-						if (cost < minCost) {
+
+						if (neighbor.serverId == server.nextHopId) {
+							if (cost > server.calculatedCost) {
+								resetCalculatedCosts();
+								return;
+							}
+						}
+
+						else if (cost < minCost) {
 							minCost = cost;
 							minCostId = neighbor.serverId;
 						}
